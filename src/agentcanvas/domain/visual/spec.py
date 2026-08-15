@@ -88,6 +88,14 @@ Scalar = str | float | bool
 # medida sin columna y un error que no explicaba la causa.
 STRICT = ConfigDict(frozen=True, extra="forbid")
 
+MAX_MEASURES = 16
+"""Tope de medidas en una visualizacion.
+
+Con ocho, una peticion tan corriente como "media, mediana, minimo y maximo
+de cuatro columnas" no cabia, y el modelo se las apanaba escribiendo la
+tabla a mano en el mensaje: cifras sin artefacto, sin codigo y sin forma de
+comprobarlas."""
+
 
 class Filter(BaseModel):
     model_config = STRICT
@@ -159,7 +167,7 @@ class VisualSpec(BaseModel):
     x: Dimension | None = None
     """Eje horizontal. Ausente en un KPI."""
 
-    y: tuple[Measure, ...] = Field(default=(), max_length=8)
+    y: tuple[Measure, ...] = Field(default=(), max_length=MAX_MEASURES)
     group_by: Dimension | None = None
     """Divide los datos en series (una linea o un color por categoria)."""
 

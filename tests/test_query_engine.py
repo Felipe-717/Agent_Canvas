@@ -340,3 +340,48 @@ def test_a_box_plot_needs_raw_values(dataset: tuple[Path, NormalizedTable]) -> N
 
     with pytest.raises(InvalidVisualSpecError, match="none"):
         _run(dataset, spec)
+
+
+def test_a_grouped_scatter_carries_its_category(
+    dataset: tuple[Path, NormalizedTable],
+) -> None:
+    # El grafico separa por categoria, asi que el resultado tiene que traerla:
+    # sin ella el frontend pintaba todos los puntos del mismo color y el
+    # grafico parecia correcto sin serlo.
+    spec = VisualSpec(
+        type=ChartType.SCATTER,
+        title="Cantidad vs valor por región",
+        x=Dimension(field="cantidad"),
+        y=(Measure(field="valor", aggregation=Aggregation.NONE),),
+        group_by=Dimension(field="region"),
+    )
+
+    data = _run(dataset, spec)
+
+    assert "region" in [column.key for column in data.columns]
+    assert {row["region"] for row in data.rows} == {"Norte", "Sur", "Este"}
+
+
+def test_a_visualisation_admits_the_measures_a_summary_needs(
+    dataset: tuple[Path, NormalizedTable],
+) -> None:
+    # Media, mediana, minimo y maximo de cuatro columnas son dieciseis medidas.
+    # Con el tope anterior de ocho, el modelo escribia la tabla a mano en el
+    # mensaje: cifras sin artefacto, sin codigo y sin forma de comprobarlas.
+    medidas = tuple(
+        Measure(field=field, aggregation=aggregation)
+        for field in ("valor", "cantidad")
+        for aggregation in (
+            Aggregation.AVG,
+            Aggregation.MEDIAN,
+            Aggregation.MIN,
+            Aggregation.MAX,
+        )
+    )
+    spec = VisualSpec(
+        type=ChartType.TABLE, title="Resumen", x=Dimension(field="region"), y=medidas
+    )
+
+    data = _run(dataset, spec)
+
+    assert len(data.columns) == 9  # la region mas las ocho medidas

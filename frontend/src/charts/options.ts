@@ -216,10 +216,30 @@ function boxOption(spec: VisualSpec, data: VisualData): EChartsOption {
 
 function scatterOption(spec: VisualSpec, data: VisualData): EChartsOption {
   const xKey = spec.x ? dimensionKey(spec.x) : "";
-  const yKey = measureKeys(spec, data)[0];
+  const groupKey = spec.group_by ? dimensionKey(spec.group_by) : null;
+  const yKey = measureKeys(spec, data).filter((key) => key !== groupKey)[0];
+
+  // Con `group_by`, una serie por categoría. Ignorarlo pintaba todos los
+  // puntos del mismo color: un gráfico que parece correcto y no lo es.
+  const grupos = groupKey ? distinct(data.rows.map((row) => row[groupKey])) : [null];
+  const series = grupos.map((grupo, index) => ({
+    type: "scatter" as const,
+    name: grupo === null ? labelOf(data, yKey) : String(grupo ?? "—"),
+    symbolSize: 9,
+    itemStyle: { color: seriesColor(index), opacity: 0.75 },
+    data: data.rows
+      .filter((row) => groupKey === null || row[groupKey] === grupo)
+      .map((row) => [Number(row[xKey] ?? 0), Number(row[yKey] ?? 0)]),
+  }));
+
   return {
     ...BASE,
     tooltip: { ...BASE.tooltip, trigger: "item" },
+    legend:
+      grupos.length > 1
+        ? { top: 0, left: 0, icon: "circle", itemWidth: 8, itemHeight: 8, textStyle: AXIS_LABEL }
+        : undefined,
+    grid: { ...BASE.grid, top: grupos.length > 1 ? 34 : 12 },
     xAxis: {
       type: "value",
       name: labelOf(data, xKey),
@@ -234,14 +254,7 @@ function scatterOption(spec: VisualSpec, data: VisualData): EChartsOption {
       splitLine: { lineStyle: { color: RULE, type: "dashed" } },
       axisLabel: { ...AXIS_LABEL, formatter: compact },
     },
-    series: [
-      {
-        type: "scatter",
-        symbolSize: 9,
-        itemStyle: { color: seriesColor(0), opacity: 0.75 },
-        data: data.rows.map((row) => [Number(row[xKey] ?? 0), Number(row[yKey] ?? 0)]),
-      },
-    ],
+    series,
   } as EChartsOption;
 }
 
