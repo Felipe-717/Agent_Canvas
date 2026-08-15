@@ -5,5 +5,25 @@ registro de herramientas tipadas, presupuesto (iteraciones / tokens / timeout),
 politica de reintentos y traza persistible de cada paso.
 
 Habla con el modelo unicamente a traves de `application.ports.LLMPort`, de modo
-que el harness no sabe si detras hay OpenAI o vLLM.
+que el harness no sabe si detras hay OpenAI o vLLM. No importa infraestructura.
 """
+
+from agentcanvas.agent.budget import Budget, BudgetExceededError, BudgetTracker
+from agentcanvas.agent.structured import (
+    AgentFailedError,
+    StructuredGenerator,
+    StructuredResult,
+)
+from agentcanvas.agent.trace import AgentStep, AgentTrace, StepKind
+
+__all__ = [
+    "AgentFailedError",
+    "AgentStep",
+    "AgentTrace",
+    "Budget",
+    "BudgetExceededError",
+    "BudgetTracker",
+    "StepKind",
+    "StructuredGenerator",
+    "StructuredResult",
+]

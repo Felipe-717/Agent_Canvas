@@ -9,6 +9,7 @@ import pytest
 from agentcanvas.bootstrap.container import Container, build_container
 from agentcanvas.config import Settings
 from agentcanvas.infrastructure.persistence.models import Base
+from tests.fakes import FakeLLM
 
 OWNER = "test-owner"
 
@@ -20,8 +21,14 @@ def settings(tmp_path: Path) -> Settings:
 
 
 @pytest.fixture
-async def container(settings: Settings) -> AsyncIterator[Container]:
-    built = build_container(settings)
+def llm() -> FakeLLM:
+    """Ningun test toca la red ni la cuota: el modelo va siempre guionado."""
+    return FakeLLM()
+
+
+@pytest.fixture
+async def container(settings: Settings, llm: FakeLLM) -> AsyncIterator[Container]:
+    built = build_container(settings, llm=llm)
     async with built.engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     yield built

@@ -22,9 +22,12 @@ from agentcanvas.application.ports.llm import (
 class FakeLLM:
     """Implementa `LLMPort` devolviendo respuestas preparadas, en orden."""
 
-    def __init__(self, responses: list[LLMResponse | Exception]) -> None:
-        self._responses = list(responses)
+    def __init__(self, responses: list[LLMResponse | Exception] | None = None) -> None:
+        self._responses = list(responses or [])
         self.requests: list[LLMRequest] = []
+
+    def queue(self, *responses: LLMResponse | Exception) -> None:
+        self._responses.extend(responses)
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
         self.requests.append(request)
@@ -44,11 +47,18 @@ class FakeLLM:
         return not self._responses
 
 
-def json_response(payload: Any, **usage: int) -> LLMResponse:
+def json_response(payload: dict[str, Any], **usage: int) -> LLMResponse:
+    """Lo que devuelve el adaptador cuando se pidio una salida estructurada."""
     return LLMResponse(
         content=json.dumps(payload, ensure_ascii=False),
+        data=payload,
         usage=Usage(**usage) if usage else Usage(),
     )
+
+
+def malformed_response(content: str = "no puedo hacer eso") -> LLMResponse:
+    """El modelo no devolvio JSON utilizable: `data` viene vacio."""
+    return LLMResponse(content=content, data=None)
 
 
 def text_response(content: str) -> LLMResponse:

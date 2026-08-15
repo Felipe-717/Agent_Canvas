@@ -18,3 +18,14 @@ class QueryEnginePort(Protocol):
     """
 
     def execute(self, spec: VisualSpec, *, source: Path, schema: DatasetSchema) -> VisualData: ...
+
+
+class DatasetSamplerPort(Protocol):
+    """Devuelve unas pocas filas reales del dataset.
+
+    El agente necesita ver datos, no solo nombres de columna: distinguir si
+    `region` contiene "Norte" o codigos como "R-01" cambia la visualizacion que
+    tiene sentido proponer.
+    """
+
+    def sample(self, source: Path, *, rows: int = 10) -> tuple[dict[str, object], ...]: ...

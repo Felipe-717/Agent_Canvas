@@ -114,6 +114,16 @@ class LLMResponse(BaseModel):
 
     content: str = ""
     tool_calls: tuple[ToolCall, ...] = ()
+    data: dict[str, Any] | None = None
+    """Contenido ya parseado cuando se pidio `response_format`.
+
+    Es el adaptador quien parsea, no quien lo consume: asi el harness no tiene
+    que saber si el JSON vino de una salida estructurada nativa o de un modelo
+    al que hubo que pedirselo por prompt. `None` significa que el modelo no
+    devolvio JSON utilizable, y entonces `content` es lo que hay que ensenarle
+    para que se corrija.
+    """
+
     usage: Usage = Usage()
     finish_reason: str | None = None
 

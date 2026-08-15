@@ -12,7 +12,11 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from agentcanvas.application.ports.query import QueryEnginePort
+from agentcanvas.agent.budget import Budget
+from agentcanvas.agent.structured import StructuredGenerator
+from agentcanvas.agent.visual_agent import VisualSpecAgent
+from agentcanvas.application.ports.llm import LLMPort
+from agentcanvas.application.ports.query import DatasetSamplerPort, QueryEnginePort
 from agentcanvas.application.ports.repositories import (
     DatasetRepositoryPort,
     StoredFileRepositoryPort,
@@ -20,9 +24,11 @@ from agentcanvas.application.ports.repositories import (
 )
 from agentcanvas.application.ports.storage import FileStoragePort
 from agentcanvas.application.ports.tabular import TabularReaderPort
+from agentcanvas.application.use_cases.create_visual import CreateVisualUseCase
 from agentcanvas.application.use_cases.ingest_file import IngestFileUseCase
 from agentcanvas.application.use_cases.render_visual import RenderVisualUseCase
 from agentcanvas.config import Settings, get_settings
+from agentcanvas.infrastructure.llm.factory import build_llm
 from agentcanvas.infrastructure.persistence.repositories import (
     SqlAlchemyDatasetRepository,
     SqlAlchemyStoredFileRepository,
@@ -42,6 +48,19 @@ class Container:
     storage: FileStoragePort
     reader: TabularReaderPort
     query_engine: QueryEnginePort
+    sampler: DatasetSamplerPort
+    llm: LLMPort
+
+    def create_visual(self, session: AsyncSession) -> CreateVisualUseCase:
+        datasets: DatasetRepositoryPort = SqlAlchemyDatasetRepository(session)
+        budget = Budget(max_iterations=self.settings.agent_max_repair_attempts + 1)
+        return CreateVisualUseCase(
+            datasets=datasets,
+            storage=self.storage,
+            engine=self.query_engine,
+            sampler=self.sampler,
+            agent=VisualSpecAgent(StructuredGenerator(self.llm, budget)),
+        )
 
     def render_visual(self, session: AsyncSession) -> RenderVisualUseCase:
         datasets: DatasetRepositoryPort = SqlAlchemyDatasetRepository(session)
@@ -64,13 +83,16 @@ class Container:
         )
 
 
-def build_container(settings: Settings | None = None) -> Container:
+def build_container(settings: Settings | None = None, *, llm: LLMPort | None = None) -> Container:
+    """`llm` se inyecta en los tests para no tocar la red ni la cuota."""
     resolved = settings or get_settings()
     resolved.ensure_directories()
     engine = build_engine(resolved.database_url, echo=resolved.debug)
     storage: FileStoragePort = LocalFileStorage(resolved.data_dir)
     reader: TabularReaderPort = PandasTabularReader()
-    query_engine: QueryEnginePort = PandasQueryEngine()
+    pandas_engine = PandasQueryEngine()
+    query_engine: QueryEnginePort = pandas_engine
+    sampler: DatasetSamplerPort = pandas_engine
     return Container(
         settings=resolved,
         engine=engine,
@@ -78,4 +100,6 @@ def build_container(settings: Settings | None = None) -> Container:
         storage=storage,
         reader=reader,
         query_engine=query_engine,
+        sampler=sampler,
+        llm=llm or build_llm(resolved),
     )

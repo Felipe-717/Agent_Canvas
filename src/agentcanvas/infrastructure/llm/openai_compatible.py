@@ -139,6 +139,7 @@ class OpenAICompatibleLLM:
         return LLMResponse(
             content=content,
             tool_calls=tool_calls,
+            data=_structured_data(content) if request.response_format is not None else None,
             usage=_usage_of(completion),
             finish_reason=getattr(choice, "finish_reason", None),
         )
@@ -224,6 +225,14 @@ def _tool_calls_from_text(content: str, tools: tuple[ToolDefinition, ...]) -> tu
             arguments=arguments if isinstance(arguments, dict) else {},
         ),
     )
+
+
+def _structured_data(content: str) -> dict[str, Any] | None:
+    """No se propaga el fallo: un JSON roto es material para la correccion."""
+    try:
+        return extract_json_object(content)
+    except LLMProtocolError:
+        return None
 
 
 def _usage_of(completion: Any) -> Usage:

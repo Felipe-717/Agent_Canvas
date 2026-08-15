@@ -26,7 +26,10 @@ FORBIDDEN_THIRD_PARTY = {
     "uvicorn",
 }
 
-PURE_LAYERS = ("domain", "application")
+# `agent` entra aqui a proposito: el harness debe hablar con el modelo solo por
+# el puerto. El dia que importe el SDK de OpenAI, cambiar de proveedor deja de
+# ser cambiar tres lineas del .env.
+PURE_LAYERS = ("domain", "application", "agent")
 
 
 def _imported_roots(path: Path) -> set[str]:
