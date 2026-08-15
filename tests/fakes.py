@@ -65,6 +65,12 @@ def text_response(content: str) -> LLMResponse:
     return LLMResponse(content=content)
 
 
+def tool_response(name: str, arguments: dict[str, Any], *, call_id: str = "call_1") -> LLMResponse:
+    from agentcanvas.application.ports.llm import ToolCall
+
+    return LLMResponse(tool_calls=(ToolCall(id=call_id, name=name, arguments=arguments),))
+
+
 def unavailable(message: str = "boom") -> LLMError:
     from agentcanvas.application.ports.llm import LLMUnavailableError
 

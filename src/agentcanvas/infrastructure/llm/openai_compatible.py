@@ -111,7 +111,10 @@ class OpenAICompatibleLLM:
         payload["messages"] = [_as_openai_message(message) for message in messages]
 
         if self._reasoning_effort and self._capabilities.supports_reasoning_effort:
-            payload["reasoning_effort"] = self._reasoning_effort
+            # Con herramientas, algunos modelos exigen esfuerzo "none" o
+            # rechazan la peticion entera con un 400.
+            incompatible = request.tools and not self._capabilities.supports_tools_with_reasoning
+            payload["reasoning_effort"] = "none" if incompatible else self._reasoning_effort
         if request.temperature is not None and self._capabilities.supports_temperature:
             payload["temperature"] = request.temperature
         if request.max_output_tokens is not None:

@@ -29,6 +29,13 @@ class ModelCapabilities(BaseModel):
     supports_reasoning_effort: bool = False
     supports_temperature: bool = True
 
+    supports_tools_with_reasoning: bool = True
+    """Si es falso, pedir herramientas y `reasoning_effort` a la vez da un 400.
+
+    Le pasa a la familia GPT-5.6 en `chat/completions`: hay que elegir. Se
+    resuelve mandando el esfuerzo en "none" cuando hay herramientas, que es lo
+    que la propia API sugiere en el mensaje de error."""
+
 
 # La familia GPT-5.6 soporta todo, incluido `reasoning_effort`.
 _GPT_5_6 = ModelCapabilities(
@@ -37,6 +44,7 @@ _GPT_5_6 = ModelCapabilities(
     supports_reasoning_effort=True,
     # Los modelos con razonamiento ignoran o rechazan `temperature`.
     supports_temperature=False,
+    supports_tools_with_reasoning=False,
 )
 
 # Suelo prudente para lo que no conocemos: se asume el minimo comun. Es

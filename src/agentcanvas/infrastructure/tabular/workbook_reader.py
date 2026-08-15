@@ -119,6 +119,13 @@ class OpenpyxlWorkbookReader:
             columns=pd.Index(names),
         )
         frame = _clean(frame, spec)
+        if frame.empty or frame.columns.empty:
+            # El mensaje viaja hasta el modelo en el ciclo de correccion, asi
+            # que dice que hacer, no que ha fallado por dentro.
+            raise ValueError(
+                f"Con esas coordenadas no sale ninguna fila de datos en la hoja "
+                f"'{spec.sheet}'. Revisa la fila de cabecera y el rango de filas."
+            )
         return _normalize(frame, destination)
 
 
