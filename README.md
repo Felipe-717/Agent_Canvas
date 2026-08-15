@@ -1,11 +1,13 @@
 # AgentCanvas AI
 
-Un chat que entiende hojas de cálculo desordenadas y construye visualizaciones
-que se actualizan solas.
+Un agente que lee hojas de cálculo y construye visualizaciones a partir de
+ellas.
 
-Adjuntas un Excel, hablas con normalidad, y los gráficos aparecen dentro de la
-conversación. Cuando llega el archivo del mes siguiente, los gráficos que
-guardaste muestran los datos nuevos sin volver a pedirle nada al modelo.
+Adjuntas un Excel en el chat. El agente recorre el archivo por celdas hasta
+decidir dónde empieza la tabla, la extrae y te enseña lo que extrajo. A partir
+de ahí preguntas, y los gráficos aparecen dentro de la conversación. Los que
+guardes en un lienzo se recalculan cuando subes el archivo del mes siguiente,
+sin volver a llamar al modelo.
 
 > Estado: en desarrollo activo. Funciona de extremo a extremo y se ha probado
 > contra archivos reales, pero no es un producto terminado. Al final del
@@ -51,13 +53,13 @@ archivo del mes siguiente actualiza veinte gráficos a la vez sin gastar un
 token.
 
 Lo mismo con la extracción: se guarda **cómo** se recortó la tabla del archivo
-—hoja, fila de cabecera, rango de columnas, filas descartadas— para poder
+(hoja, fila de cabecera, rango de columnas, filas descartadas) para poder
 releer el archivo nuevo exactamente igual.
 
-**El modelo propone, el dominio dispone.** El LLM nunca ejecuta nada. Produce
-especificaciones que se validan contra el esquema real antes de tocar los
-datos, y si algo no encaja se le devuelve el motivo para que se corrija. Un
-modelo peor produce un gráfico peor elegido, nunca un panel roto.
+**El modelo no calcula.** Produce especificaciones que se validan contra el
+esquema real antes de tocar los datos, y si algo no encaja se le devuelve el
+motivo para que se corrija. Los números los saca un motor determinista con
+pandas. Un modelo peor produce un gráfico peor elegido, nunca un panel roto.
 
 ## Lo que se puede ver
 
@@ -98,6 +100,12 @@ cualquier suma o máximo.
 Ese aviso va al modelo **y al usuario**, junto a las primeras filas de lo
 extraído. Sin verlas, una extracción equivocada no se nota hasta dos preguntas
 después, cuando ya es un gráfico.
+
+**Las cifras que van en el texto.** Cuando la respuesta es una frase y no un
+gráfico, la consulta queda guardada igual que un gráfico, plegada debajo del
+mensaje. Se abre y están las filas y el Python que las produce. Sin eso no hay
+forma de distinguir un número calculado de uno recordado: con un conjunto
+conocido como iris los dos dan lo mismo, con los datos de alguien no.
 
 ## Arquitectura
 
@@ -175,8 +183,8 @@ Lo último no es una errata: releer y recalcular no pasa por el modelo.
   caso más difícil y el siguiente en la lista.
 - **No amplía lo ya preparado.** Si preparó cuatro columnas y le pides algo que
   necesita una quinta, a veces dice que no puede en vez de volver a preparar.
-- **No hay automatizaciones.** Generar y ejecutar Python en un sandbox —la otra
-  mitad del diseño original— está sin empezar.
+- **No hay automatizaciones.** Generar y ejecutar Python en un sandbox, que es
+  la otra mitad del diseño original, está sin empezar.
 - **Un solo usuario.** Sin autenticación. `owner_id` existe en el modelo de
   datos desde el principio, así que añadirla no obliga a migrar nada.
 - Solo CSV y XLSX. PDF y DOCX, pendientes.
@@ -186,7 +194,7 @@ Lo último no es una errata: releer y recalcular no pasa por el modelo.
 | | |
 |---|---|
 | Backend | ~6.700 líneas |
-| Tests | ~3.750 líneas, 272 tests |
+| Tests | ~3.750 líneas, 277 tests |
 | Frontend | ~2.100 líneas |
 | Comprobación de tipos | `mypy --strict`, 96 archivos |
 
