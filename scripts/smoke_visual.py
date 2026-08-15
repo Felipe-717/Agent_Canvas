@@ -66,7 +66,11 @@ async def main(instruction: str) -> int:
 def _settings() -> Settings:
     base = get_settings()
     # Directorio propio: la prueba no debe ensuciar los datos de desarrollo.
-    return base.model_copy(update={"data_dir": base.data_dir / "smoke", "database_url": ""})
+    # Hay que revalidar, no `model_copy`: la URL de la base se deriva de
+    # `data_dir` en un validador, y `model_copy` no ejecuta validadores.
+    return Settings.model_validate(
+        {**base.model_dump(), "data_dir": base.data_dir / "smoke", "database_url": ""}
+    )
 
 
 async def _run(container: Container, instruction: str) -> CreateVisualResult:
@@ -97,6 +101,13 @@ async def _run(container: Container, instruction: str) -> CreateVisualResult:
 
 
 def _report(result: CreateVisualResult) -> None:
+    for step in result.trace.steps:
+        if step.problems:
+            print(f"Intento {step.iteration} rechazado:")
+            for problem in step.problems:
+                print(f"  - {problem}")
+            print()
+
     print("Especificacion propuesta:")
     print(json.dumps(result.spec.model_dump(mode="json", exclude_none=True), indent=2))
     print("\nDatos calculados:")

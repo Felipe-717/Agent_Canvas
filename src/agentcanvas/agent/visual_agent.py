@@ -42,9 +42,13 @@ Reglas:
    Para contar usa "count", que puede ir sin columna.
 5. Cuando el usuario pida un "top N" o "los mejores", usa `sort` con direccion
    "desc" y `limit` N.
-6. `group_by` sirve para dividir en series. No lo uses si la peticion no lo
+6. `sort.by` no es un nombre de columna del esquema, sino una clave del
+   resultado. Una dimension aporta su propio nombre (o "campo_grano" si lleva
+   `time_grain`) y una medida aporta "agregacion_campo". Para ordenar por la
+   suma de `valor` hay que escribir "sum_valor", no "valor".
+7. `group_by` sirve para dividir en series. No lo uses si la peticion no lo
    pide, y nunca con la misma columna que el eje.
-7. El `title` debe ser corto, descriptivo y en el idioma del usuario.
+8. El `title` debe ser corto, descriptivo y en el idioma del usuario.
 
 Responde solo con el objeto JSON de la especificacion."""
 
