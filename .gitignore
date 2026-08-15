@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Entornos
+.venv/
+venv/
+.env
+.env.local
+
+# Datos locales (nunca versionar archivos del usuario ni la base de datos)
+var/
+*.db
+*.sqlite3
+*.sqlite3-journal
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# Editores / SO
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

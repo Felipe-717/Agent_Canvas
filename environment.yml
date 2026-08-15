@@ -1,0 +1,14 @@
+name: agentcanvas
+channels:
+  - conda-forge
+dependencies:
+  # Python 3.12: pandas/pyarrow/openpyxl tienen wheels estables en Windows.
+  - python=3.12
+  # Las libs con binarios pesados vienen de conda-forge, no de pip.
+  - pandas=2.2.*
+  - pyarrow=17.*
+  - openpyxl=3.1.*
+  - pip
+  - pip:
+      # El resto del proyecto (y sus deps) se instala desde pyproject.toml.
+      - -e .[dev]
