@@ -44,6 +44,13 @@ class Aggregation(StrEnum):
     una tabla de detalle. No se puede mezclar con medidas agregadas."""
 
 
+class Operation(StrEnum):
+    ADD = "add"
+    SUBTRACT = "subtract"
+    MULTIPLY = "multiply"
+    DIVIDE = "divide"
+
+
 class TimeGrain(StrEnum):
     DAY = "day"
     WEEK = "week"
@@ -95,6 +102,10 @@ Con ocho, una peticion tan corriente como "media, mediana, minimo y maximo
 de cuatro columnas" no cabia, y el modelo se las apanaba escribiendo la
 tabla a mano en el mensaje: cifras sin artefacto, sin codigo y sin forma de
 comprobarlas."""
+
+MAX_COMPUTED = 4
+"""Tope de columnas calculadas. Con mas, lo que se esta pidiendo no es una
+columna derivada sino una transformacion del dataset, y eso se prepara aparte."""
 
 
 class Filter(BaseModel):
@@ -150,6 +161,40 @@ class Measure(BaseModel):
         return f"{self.aggregation}_{self.field}"
 
 
+class Computed(BaseModel):
+    """Una columna nueva, calculada fila a fila antes de filtrar y agregar.
+
+    Existe porque preguntas de lo mas normales -"la proporcion entre largo y
+    ancho del petalo", "el margen sobre el precio"- no se podian expresar, y el
+    asistente tenia que decir que no. Con dos columnas y una operacion se cubre
+    la mayoria.
+
+    Deliberadamente no es una expresion libre: una operacion entre dos
+    operandos, y cada operando es una columna del dataset o un numero. Admitir
+    formulas obligaria a analizar y ejecutar texto que escribe un modelo, que es
+    justo lo que este diseno evita. Encadenar operaciones tampoco: los operandos
+    son siempre columnas reales, nunca otra columna calculada.
+    """
+
+    model_config = STRICT
+
+    name: str
+    """Nombre de la columna nueva. Se usa igual que una columna del dataset."""
+
+    left: str
+    """Columna del dataset sobre la que se opera."""
+
+    operation: Operation
+
+    right_field: str | None = None
+    """El otro operando, si es otra columna."""
+
+    right_value: float | None = None
+    """El otro operando, si es un numero. Va uno de los dos, no ambos."""
+
+    label: str | None = None
+
+
 class Sort(BaseModel):
     model_config = STRICT
 
@@ -164,6 +209,10 @@ class VisualSpec(BaseModel):
 
     type: ChartType
     title: str
+    computed: tuple[Computed, ...] = Field(default=(), max_length=MAX_COMPUTED)
+    """Columnas derivadas que se crean antes de filtrar y agregar. El resto de
+    la spec puede usarlas por su nombre igual que cualquier otra columna."""
+
     x: Dimension | None = None
     """Eje horizontal. Ausente en un KPI."""
 
@@ -193,9 +242,26 @@ class VisualSpec(BaseModel):
         return tuple(d for d in (self.x, self.group_by) if d is not None)
 
     @property
+    def computed_names(self) -> frozenset[str]:
+        return frozenset(computed.name for computed in self.computed)
+
+    @property
     def referenced_fields(self) -> tuple[str, ...]:
-        """Todas las columnas del dataset que la spec necesita leer."""
+        """Las columnas del dataset que la spec necesita leer.
+
+        Las calculadas quedan fuera: no existen en el archivo, se crean al
+        vuelo. Sus operandos, en cambio, entran aqui, que es lo que hace que
+        una formula sobre una columna inventada se detecte igual que el resto.
+        """
         fields = [dimension.field for dimension in self.dimensions]
         fields.extend(measure.field for measure in self.y if measure.field is not None)
         fields.extend(filter.field for filter in self.filters)
-        return tuple(dict.fromkeys(fields))
+        derived = self.computed_names
+        for computed in self.computed:
+            fields.append(computed.left)
+            if computed.right_field is not None:
+                fields.append(computed.right_field)
+        # Un operando que nombre otra columna calculada tampoco se busca en el
+        # archivo. No es que este permitido: es que la validacion tiene un
+        # mensaje mucho mejor para ese caso que "esa columna no existe".
+        return tuple(dict.fromkeys(f for f in fields if f not in derived))

@@ -60,6 +60,17 @@ Reglas de las visualizaciones:
 - `sort.by` no es una columna del origen sino una clave del resultado: la suma
   de `valor` se llama "sum_valor", y una dimension con grano mensual se llama
   "fecha_month".
+- Si la pregunta necesita una columna que no existe pero se obtiene operando dos
+  que si existen (una proporcion, una diferencia, un margen, un porcentaje),
+  declarala en `computed` y usala luego por su nombre como cualquier otra. Cada
+  una es una operacion (add, subtract, multiply, divide) entre `left` y uno de
+  los dos: `right_field` si el otro operando es una columna, `right_value` si es
+  un numero. No se pueden encadenar: los operandos son columnas del dataset.
+
+Lo que sigue sin poder hacerse: correlaciones, desviacion tipica, percentiles
+distintos de los de una caja, regresiones y cualquier formula que no sea una
+operacion entre dos operandos. Si te piden algo asi, dilo claramente en vez de
+aproximarlo o de calcularlo por tu cuenta.
 
 Si el usuario pide una tabla, dibujala con `crear_visual` usando el tipo
 "table". No la escribas a mano en el mensaje: una tabla escrita por ti no se

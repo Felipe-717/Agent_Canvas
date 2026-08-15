@@ -18,6 +18,7 @@ from agentcanvas.domain.visual.spec import (
     Dimension,
     Filter,
     FilterOperator,
+    Operation,
     SortDirection,
     TimeGrain,
     VisualSpec,
@@ -58,12 +59,40 @@ def as_python(spec: VisualSpec, *, source: str = "datos.parquet") -> str:
             f"df[{ROW_MARKER!r}] = 1",
         ]
 
+    lines += _computed_lines(spec)
     lines += _filter_lines(spec.filters)
     lines += _grain_lines(spec.dimensions)
     lines += _aggregation_lines(spec)
     lines += _sort_lines(spec)
     lines += _limit_lines(spec)
     return "\n".join(lines).rstrip() + "\n"
+
+
+_OPERATORS: dict[Operation, str] = {
+    Operation.ADD: "+",
+    Operation.SUBTRACT: "-",
+    Operation.MULTIPLY: "*",
+    Operation.DIVIDE: "/",
+}
+
+
+def _computed_lines(spec: VisualSpec) -> list[str]:
+    if not spec.computed:
+        return []
+    lines = ["", "# Columnas calculadas"]
+    for computed in spec.computed:
+        if computed.right_field is not None:
+            right = f"df[{computed.right_field!r}]"
+        else:
+            right = repr(computed.right_value)
+        # El `replace` no es adorno: dividir entre cero da infinito, y un
+        # infinito estropea la escala del eje sin decir por que.
+        lines.append(
+            f"df[{computed.name!r}] = ("
+            f"df[{computed.left!r}] {_OPERATORS[computed.operation]} {right}"
+            f").replace([float('inf'), float('-inf')], pd.NA)"
+        )
+    return lines
 
 
 def _filter_lines(filters: tuple[Filter, ...]) -> list[str]:

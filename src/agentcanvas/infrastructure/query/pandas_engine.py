@@ -10,6 +10,7 @@ sobre el mismo Parquet sin tocar nada mas: el puerto es el mismo.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ from agentcanvas.domain.visual.spec import (
     Filter,
     FilterOperator,
     Measure,
+    Operation,
     SortDirection,
     TimeGrain,
     VisualSpec,
@@ -46,6 +48,13 @@ _AGGREGATION_FUNCTIONS: dict[Aggregation, str] = {
     Aggregation.COUNT: "count",
     Aggregation.COUNT_DISTINCT: "nunique",
     Aggregation.MEDIAN: "median",
+}
+
+_OPERATIONS: dict[Operation, Callable[[pd.Series[Any], Any], pd.Series[Any]]] = {
+    Operation.ADD: lambda left, right: left + right,
+    Operation.SUBTRACT: lambda left, right: left - right,
+    Operation.MULTIPLY: lambda left, right: left * right,
+    Operation.DIVIDE: lambda left, right: left / right,
 }
 
 # Alias de *periodo* (D/W/M/Q/Y), no de offset: `to_period` no acepta "MS".
@@ -74,6 +83,8 @@ class PandasQueryEngine:
         ensure_valid(spec, schema)
 
         frame = _load(source, spec)
+        # Antes de filtrar: un filtro puede ir sobre la columna calculada.
+        frame = _apply_computed(frame, spec)
         frame = _apply_filters(frame, spec.filters, schema)
         frame = _apply_time_grains(frame, spec.dimensions)
 
@@ -106,6 +117,22 @@ def _load(source: Path, spec: VisualSpec) -> pd.DataFrame:
     needed = list(spec.referenced_fields)
     frame = pd.read_parquet(source, columns=needed) if needed else pd.read_parquet(source)
     frame[_ROW_MARKER] = 1
+    return frame
+
+
+def _apply_computed(frame: pd.DataFrame, spec: VisualSpec) -> pd.DataFrame:
+    """Materializa las columnas derivadas, fila a fila."""
+    for computed in spec.computed:
+        left = frame[computed.left]
+        right: Any = (
+            frame[computed.right_field]
+            if computed.right_field is not None
+            else computed.right_value
+        )
+        column = _OPERATIONS[computed.operation](left, right)
+        # Dividir entre cero da infinito, y un infinito estropea la escala de un
+        # eje entero sin decir por que. Como hueco al menos se ve que falta.
+        frame[computed.name] = column.replace([float("inf"), float("-inf")], pd.NA)
     return frame
 
 

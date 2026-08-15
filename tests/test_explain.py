@@ -19,10 +19,12 @@ from agentcanvas.domain.visual.explain import as_python
 from agentcanvas.domain.visual.spec import (
     Aggregation,
     ChartType,
+    Computed,
     Dimension,
     Filter,
     FilterOperator,
     Measure,
+    Operation,
     Sort,
     SortDirection,
     TimeGrain,
@@ -248,5 +250,73 @@ def test_a_box_plot_matches(dataset: tuple[Path, NormalizedTable]) -> None:
             title="x",
             x=Dimension(field="region"),
             y=(Measure(field="valor", aggregation=Aggregation.NONE),),
+        ),
+    )
+
+
+def test_a_computed_column_matches(dataset: tuple[Path, NormalizedTable]) -> None:
+    # El valor unitario no esta en el archivo: sale de dividir dos columnas.
+    _assert_matches(
+        dataset,
+        VisualSpec(
+            type=ChartType.BAR,
+            title="x",
+            computed=(
+                Computed(
+                    name="valor_unitario",
+                    left="valor",
+                    operation=Operation.DIVIDE,
+                    right_field="cantidad",
+                ),
+            ),
+            x=Dimension(field="region"),
+            y=(Measure(field="valor_unitario", aggregation=Aggregation.AVG),),
+        ),
+    )
+
+
+def test_a_computed_column_in_a_box_matches(dataset: tuple[Path, NormalizedTable]) -> None:
+    # Una caja sobre una columna que no existe hasta que se calcula.
+    _assert_matches(
+        dataset,
+        VisualSpec(
+            type=ChartType.BOX,
+            title="x",
+            computed=(
+                Computed(
+                    name="valor_unitario",
+                    left="valor",
+                    operation=Operation.DIVIDE,
+                    right_field="cantidad",
+                ),
+            ),
+            x=Dimension(field="region"),
+            y=(Measure(field="valor_unitario", aggregation=Aggregation.NONE),),
+        ),
+    )
+
+
+def test_a_computed_column_filtered_and_sorted_matches(
+    dataset: tuple[Path, NormalizedTable],
+) -> None:
+    # Filtrar por la columna calculada obliga a crearla antes de filtrar; si el
+    # orden de los pasos divergiera entre motor y codigo, esto se pondria rojo.
+    _assert_matches(
+        dataset,
+        VisualSpec(
+            type=ChartType.BAR,
+            title="x",
+            computed=(
+                Computed(
+                    name="valor_doble",
+                    left="valor",
+                    operation=Operation.MULTIPLY,
+                    right_value=2,
+                ),
+            ),
+            filters=(Filter(field="valor_doble", operator=FilterOperator.GT, value=150),),
+            x=Dimension(field="producto"),
+            y=(Measure(field="valor_doble", aggregation=Aggregation.SUM),),
+            sort=Sort(by="sum_valor_doble", direction=SortDirection.DESC),
         ),
     )

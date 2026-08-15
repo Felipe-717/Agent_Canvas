@@ -18,6 +18,7 @@ from agentcanvas.domain.visual.spec import (
     Dimension,
     FilterOperator,
     Measure,
+    Operation,
     VisualSpec,
 )
 
@@ -41,6 +42,22 @@ def canonicalize(spec: VisualSpec, schema: DatasetSchema) -> VisualSpec:
 
     return spec.model_copy(
         update={
+            # El nombre de una columna calculada se respeta tal cual: no esta en
+            # el schema, asi que `name` lo devolveria igual, pero sus operandos
+            # si son columnas reales y hay que normalizarlos.
+            "computed": tuple(
+                computed.model_copy(
+                    update={
+                        "left": name(computed.left),
+                        "right_field": (
+                            name(computed.right_field)
+                            if computed.right_field is not None
+                            else None
+                        ),
+                    }
+                )
+                for computed in spec.computed
+            ),
             "x": _renamed_dimension(spec.x, name),
             "group_by": _renamed_dimension(spec.group_by, name),
             "y": tuple(
@@ -72,6 +89,11 @@ def validate_spec(spec: VisualSpec, schema: DatasetSchema) -> tuple[str, ...]:
     if problems:
         # Sin columnas validas, el resto de comprobaciones solo generaria ruido.
         return tuple(problems)
+    problems += _computed_problems(spec, schema)
+    if problems:
+        # Lo mismo: si una columna calculada no se sostiene, todo lo que la use
+        # fallaria en cascada y el modelo recibiria cinco quejas por un error.
+        return tuple(problems)
     problems += _measure_problems(spec, schema)
     problems += _dimension_problems(spec, schema)
     problems += _chart_shape_problems(spec)
@@ -93,6 +115,53 @@ def _unknown_fields(spec: VisualSpec, schema: DatasetSchema) -> list[str]:
         for field in spec.referenced_fields
         if not schema.has(field)
     ]
+
+
+def _computed_problems(spec: VisualSpec, schema: DatasetSchema) -> list[str]:
+    """Comprueba las columnas calculadas antes de que las use nadie."""
+    problems: list[str] = []
+    seen: set[str] = set()
+    for computed in spec.computed:
+        name = computed.name
+        if not name.strip():
+            problems.append("Una columna calculada no puede quedarse sin nombre")
+            continue
+        if schema.has(name):
+            problems.append(
+                f"La columna calculada '{name}' se llama igual que una columna del "
+                f"dataset: ponle otro nombre para no taparla"
+            )
+        if name in seen:
+            problems.append(f"Hay dos columnas calculadas llamadas '{name}'")
+        seen.add(name)
+
+        if (computed.right_field is None) == (computed.right_value is None):
+            problems.append(
+                f"La columna calculada '{name}' necesita exactamente un segundo "
+                f"operando: o `right_field` con el nombre de otra columna, o "
+                f"`right_value` con un numero"
+            )
+        if computed.operation is Operation.DIVIDE and computed.right_value == 0:
+            problems.append(f"La columna calculada '{name}' divide entre cero")
+
+        for operand in (computed.left, computed.right_field):
+            if operand is None:
+                continue
+            if operand in spec.computed_names:
+                # Encadenarlas obligaria a resolver un orden de dependencias y a
+                # detectar ciclos, y no hay ninguna pregunta real que lo pida.
+                problems.append(
+                    f"La columna calculada '{name}' se apoya en '{operand}', que "
+                    f"tambien es calculada: los operandos deben ser columnas del dataset"
+                )
+                continue
+            column = schema.get(operand)
+            if column is not None and not column.type.is_numeric:
+                problems.append(
+                    f"No se puede operar con '{operand}' en la columna calculada "
+                    f"'{name}': es de tipo {column.type}, no un numero"
+                )
+    return problems
 
 
 def _measure_problems(spec: VisualSpec, schema: DatasetSchema) -> list[str]:
@@ -255,17 +324,26 @@ def result_keys(spec: VisualSpec) -> tuple[str, ...]:
 
 def result_type(spec: VisualSpec, key: str, schema: DatasetSchema) -> ColumnType:
     """Tipo de una columna del resultado."""
+
+    def base(field: str) -> ColumnType:
+        """Tipo de una columna de origen, sea del dataset o calculada."""
+        if field in spec.computed_names:
+            # Dividir dos enteros da decimales, y distinguir caso por caso solo
+            # serviria para que la tabla ensenase a veces un entero.
+            return ColumnType.FLOAT
+        column = schema.get(field)
+        return column.type if column is not None else ColumnType.UNKNOWN
+
     if spec.type is ChartType.BOX and key in BOX_KEYS:
         # Los cuartiles interpolan, asi que aunque la columna sea entera el
         # resultado no tiene por que serlo.
         return ColumnType.FLOAT
     for dimension in spec.dimensions:
         if dimension.key == key:
-            column = schema.get(dimension.field)
-            if column is None:
-                return ColumnType.UNKNOWN
             # Agrupar por mes convierte un instante en una fecha.
-            return ColumnType.DATE if dimension.time_grain is not None else column.type
+            if dimension.time_grain is not None:
+                return ColumnType.DATE
+            return base(dimension.field)
     for measure in spec.y:
         if measure.key != key:
             continue
@@ -273,13 +351,11 @@ def result_type(spec: VisualSpec, key: str, schema: DatasetSchema) -> ColumnType
             return ColumnType.INTEGER
         if measure.field is None:
             return ColumnType.INTEGER
-        column = schema.get(measure.field)
-        if column is None:
-            return ColumnType.UNKNOWN
+        origin = base(measure.field)
         if measure.aggregation is Aggregation.NONE:
-            return column.type
+            return origin
         # Promediar o mediar enteros da decimales.
         if measure.aggregation in (Aggregation.AVG, Aggregation.MEDIAN):
             return ColumnType.FLOAT
-        return column.type
+        return origin
     return ColumnType.UNKNOWN

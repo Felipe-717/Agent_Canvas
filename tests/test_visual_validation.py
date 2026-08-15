@@ -14,10 +14,12 @@ from agentcanvas.domain.dataset.schema import ColumnSchema, ColumnType, DatasetS
 from agentcanvas.domain.visual.spec import (
     Aggregation,
     ChartType,
+    Computed,
     Dimension,
     Filter,
     FilterOperator,
     Measure,
+    Operation,
     Sort,
     TimeGrain,
     VisualSpec,
@@ -293,3 +295,96 @@ def test_a_measure_without_a_column_names_the_missing_key() -> None:
 
     # Decir "necesita una columna" no basta: hay que decir como se llama.
     assert any("`field`" in problem for problem in problems)
+
+
+# -------------------------------------------------------- columnas calculadas
+
+
+def _ratio(**cambios: object) -> VisualSpec:
+    campos: dict[str, object] = {
+        "name": "valor_unitario",
+        "left": "valor",
+        "operation": Operation.DIVIDE,
+        "right_field": "cantidad",
+    }
+    campos.update(cambios)
+    return VisualSpec(
+        type=ChartType.BAR,
+        title="x",
+        computed=(Computed(**campos),),  # type: ignore[arg-type]
+        x=Dimension(field="region"),
+        # La medida sigue al nombre: si no, cambiarlo dejaria la spec apuntando
+        # a una columna que no existe y saltaria otro error antes que el suyo.
+        y=(Measure(field=str(campos["name"]), aggregation=Aggregation.AVG),),
+    )
+
+
+def test_a_measure_can_use_a_computed_column() -> None:
+    # La columna no esta en el schema y aun asi la spec es valida: se crea antes
+    # de agregar. Sin esto, "la proporcion entre A y B" no se podia ni pedir.
+    assert validate_spec(_ratio(), SCHEMA) == ()
+
+
+def test_a_computed_column_cannot_shadow_a_real_one() -> None:
+    problems = validate_spec(_ratio(name="valor"), SCHEMA)
+    assert any("se llama igual que una columna del dataset" in p for p in problems)
+
+
+def test_a_computed_column_cannot_operate_on_text() -> None:
+    problems = validate_spec(_ratio(right_field="region"), SCHEMA)
+    assert any("'region'" in p and "no un numero" in p for p in problems)
+
+
+def test_a_computed_column_needs_exactly_one_second_operand() -> None:
+    ninguno = validate_spec(_ratio(right_field=None), SCHEMA)
+    assert any("exactamente un segundo operando" in p for p in ninguno)
+
+    ambos = validate_spec(_ratio(right_value=2.0), SCHEMA)
+    assert any("exactamente un segundo operando" in p for p in ambos)
+
+
+def test_a_computed_column_cannot_divide_by_zero() -> None:
+    problems = validate_spec(_ratio(right_field=None, right_value=0.0), SCHEMA)
+    assert any("divide entre cero" in p for p in problems)
+
+
+def test_computed_columns_cannot_be_chained() -> None:
+    # Encadenarlas exigiria resolver dependencias y detectar ciclos, y ninguna
+    # pregunta real lo pide. Mejor decirlo que resolverlo a medias.
+    spec = VisualSpec(
+        type=ChartType.BAR,
+        title="x",
+        computed=(
+            Computed(
+                name="unitario",
+                left="valor",
+                operation=Operation.DIVIDE,
+                right_field="cantidad",
+            ),
+            Computed(
+                name="doble",
+                left="unitario",
+                operation=Operation.MULTIPLY,
+                right_value=2.0,
+            ),
+        ),
+        x=Dimension(field="region"),
+        y=(Measure(field="doble", aggregation=Aggregation.AVG),),
+    )
+    problems = validate_spec(spec, SCHEMA)
+    assert any("tambien es calculada" in p for p in problems)
+
+
+def test_an_operand_that_does_not_exist_is_reported() -> None:
+    problems = validate_spec(_ratio(right_field="inventada"), SCHEMA)
+    assert any("'inventada' no existe" in p for p in problems)
+
+
+def test_canonicalize_normalises_the_operands() -> None:
+    # La spec nombra las columnas como venian en el archivo; los operandos hay
+    # que normalizarlos igual que el resto, o el motor no los encuentra.
+    spec = _ratio(left="Valor", right_field="Cantidad")
+    resultado = canonicalize(spec, SCHEMA)
+    assert resultado.computed[0].left == "valor"
+    assert resultado.computed[0].right_field == "cantidad"
+    assert resultado.computed[0].name == "valor_unitario"
