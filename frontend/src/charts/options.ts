@@ -11,7 +11,7 @@
 
 import type { EChartsOption } from "echarts";
 import type { Cell, VisualData, VisualSpec } from "../api/types";
-import { INK, INK_FAINT, INK_MUTED, RULE, SERIES, seriesColor } from "./palette";
+import { CLAY, INK, INK_FAINT, INK_MUTED, RULE, SERIES, seriesColor } from "./palette";
 
 const AXIS_LABEL = { color: INK_MUTED, fontSize: 11 };
 
@@ -37,6 +37,8 @@ export function buildOption(spec: VisualSpec, data: VisualData): EChartsOption {
       return pieOption(spec, data);
     case "scatter":
       return scatterOption(spec, data);
+    case "box":
+      return boxOption(spec, data);
     case "bar":
     case "line":
     case "area":
@@ -154,6 +156,59 @@ function pieOption(spec: VisualSpec, data: VisualData): EChartsOption {
           name: String(row[nameKey] ?? "—"),
           value: Number(row[valueKey] ?? 0),
         })),
+      },
+    ],
+  } as EChartsOption;
+}
+
+/** Cajas y bigotes.
+ *
+ * El backend ya ha calculado las cinco cifras por categoría; aquí solo se
+ * ordenan como ECharts las quiere: [mínimo, Q1, mediana, Q3, máximo]. */
+function boxOption(spec: VisualSpec, data: VisualData): EChartsOption {
+  const nameKey = spec.x ? dimensionKey(spec.x) : "";
+  const orden = ["minimo", "q1", "mediana", "q3", "maximo"] as const;
+  const etiquetas: Record<string, string> = {
+    minimo: "mínimo",
+    q1: "Q1",
+    mediana: "mediana",
+    q3: "Q3",
+    maximo: "máximo",
+  };
+
+  return {
+    ...BASE,
+    tooltip: {
+      ...BASE.tooltip,
+      trigger: "item",
+      formatter: (parametros: { name: string; value: number[] }) => {
+        const [, min, q1, mediana, q3, max] = parametros.value;
+        const filas = [min, q1, mediana, q3, max]
+          .map((valor, indice) => `${etiquetas[orden[indice]]}: ${compact(valor)}`)
+          .join("<br>");
+        return `<b>${parametros.name}</b><br>${filas}`;
+      },
+    },
+    xAxis: {
+      type: "category",
+      data: data.rows.map((row) => formatCell(row[nameKey])),
+      axisLine: { lineStyle: { color: RULE } },
+      axisTick: { show: false },
+      axisLabel: AXIS_LABEL,
+    },
+    yAxis: {
+      type: "value",
+      splitLine: { lineStyle: { color: RULE, type: "dashed" } },
+      axisLabel: { ...AXIS_LABEL, formatter: compact },
+    },
+    series: [
+      {
+        type: "boxplot",
+        data: data.rows.map((row) => orden.map((key) => Number(row[key] ?? 0))),
+        itemStyle: { color: "#fdfbf7", borderColor: seriesColor(0), borderWidth: 1.5 },
+        // La mediana en el color de acento: es la cifra que se lee primero.
+        emphasis: { itemStyle: { borderColor: CLAY, borderWidth: 2 } },
+        boxWidth: [10, 46],
       },
     ],
   } as EChartsOption;

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { CodeIcon } from "./Icons";
+import { Python } from "./Python";
 
 /** El cálculo exacto, en Python.
  *
@@ -50,8 +51,8 @@ export function HowItWorks({ code }: { code: string | null }) {
               </button>
             </div>
           </header>
-          <pre className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-700">
-            {code}
+          <pre className="min-h-0 flex-1 overflow-auto px-3 py-2">
+            <Python code={code} />
           </pre>
         </div>
       )}

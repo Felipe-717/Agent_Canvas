@@ -46,6 +46,9 @@ tipo segun la pregunta:
   evolucion en el tiempo -> line ; comparar categorias -> bar
   reparto de un total -> pie   ; un solo numero -> kpi
   relacion entre dos variables numericas -> scatter (agregacion "none")
+  comparar la distribucion de una medida entre categorias -> box
+    (una caja por categoria; su medida tambien usa agregacion "none",
+     porque el resumen en cuartiles lo calcula el propio grafico)
   detalle fila a fila -> table
 
 Reglas de las visualizaciones:

@@ -297,3 +297,46 @@ def test_an_invalid_spec_fails_before_reading_the_data(
 
     assert "inexistente" in str(error.value)
 
+
+
+def test_a_box_plot_summarises_each_category(
+    dataset: tuple[Path, NormalizedTable],
+) -> None:
+    spec = VisualSpec(
+        type=ChartType.BOX,
+        title="Reparto del valor por región",
+        x=Dimension(field="region"),
+        y=(Measure(field="valor", aggregation=Aggregation.NONE),),
+    )
+
+    data = _run(dataset, spec)
+
+    assert [column.key for column in data.columns] == [
+        "region", "minimo", "q1", "mediana", "q3", "maximo",
+    ]
+    norte = next(row for row in data.rows if row["region"] == "Norte")
+    # Norte: 100, 120, 200.
+    assert norte["minimo"] == 100.0
+    assert norte["mediana"] == 120.0
+    assert norte["maximo"] == 200.0
+    # Los cuartiles interpolan, asi que el tipo es decimal aunque los datos
+    # fueran enteros.
+    assert all(
+        column.type is ColumnType.FLOAT
+        for column in data.columns
+        if column.key != "region"
+    )
+
+
+def test_a_box_plot_needs_raw_values(dataset: tuple[Path, NormalizedTable]) -> None:
+    # El resumen en cuartiles lo hace el propio grafico: pedir una suma encima
+    # seria calcular dos veces.
+    spec = VisualSpec(
+        type=ChartType.BOX,
+        title="x",
+        x=Dimension(field="region"),
+        y=(Measure(field="valor", aggregation=Aggregation.SUM),),
+    )
+
+    with pytest.raises(InvalidVisualSpecError, match="none"):
+        _run(dataset, spec)

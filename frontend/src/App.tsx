@@ -148,6 +148,15 @@ export default function App() {
           }
         }}
         onOpenCanvas={(id) => void openCanvas(id)}
+        onDeleteCanvas={async (id) => {
+          await api.deleteCanvas(id);
+          await refreshCanvases();
+          // Si se estaba mirando, no puede quedarse en una vista fantasma.
+          if (view.kind === "canvas" && view.id === id) {
+            setView({ kind: "chat" });
+            setCanvas(null);
+          }
+        }}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">

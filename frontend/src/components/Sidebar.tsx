@@ -14,6 +14,7 @@ export function Sidebar({
   onNewConversation,
   onDeleteConversation,
   onOpenCanvas,
+  onDeleteCanvas,
 }: {
   conversations: Conversation[];
   activeConversation: string | null;
@@ -23,6 +24,7 @@ export function Sidebar({
   onNewConversation: () => void;
   onDeleteConversation: (id: string) => void;
   onOpenCanvas: (id: string) => void;
+  onDeleteCanvas: (id: string) => void;
 }) {
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-bone-300 bg-bone-100">
@@ -69,29 +71,38 @@ export function Sidebar({
           <Hint>Guarda un gráfico del chat y aparecerá aquí.</Hint>
         )}
         {canvases.map((canvas) => (
-          <button
-            key={canvas.id}
-            type="button"
-            onClick={() => onOpenCanvas(canvas.id)}
-            className={`mb-1 w-full rounded px-2 py-1.5 text-left transition-colors ${
-              canvas.id === activeCanvas
-                ? "bg-bone-200 text-ink-900"
-                : "text-ink-500 hover:bg-bone-200/60 hover:text-ink-900"
-            }`}
-          >
-            <span className="flex items-baseline justify-between gap-2">
-              <span className="truncate text-sm">{canvas.name}</span>
-              <span className="shrink-0 text-xs text-ink-300 tabular">
-                {canvas.visual_count}
+          <div key={canvas.id} className="group relative">
+            <button
+              type="button"
+              onClick={() => onOpenCanvas(canvas.id)}
+              className={`mb-1 w-full rounded px-2 py-1.5 pr-7 text-left transition-colors ${
+                canvas.id === activeCanvas
+                  ? "bg-bone-200 text-ink-900"
+                  : "text-ink-500 hover:bg-bone-200/60 hover:text-ink-900"
+              }`}
+            >
+              <span className="flex items-baseline justify-between gap-2">
+                <span className="truncate text-sm">{canvas.name}</span>
+                <span className="shrink-0 text-xs text-ink-300 tabular">
+                  {canvas.visual_count}
+                </span>
               </span>
-            </span>
-            {/* Las fuentes, porque un lienzo puede mezclar varias. */}
-            {canvas.sources.length > 0 && (
-              <span className="mt-0.5 block truncate text-xs text-ink-300">
-                {canvas.sources.map((source) => source.name).join(" · ")}
-              </span>
-            )}
-          </button>
+              {/* Las fuentes, porque un lienzo puede mezclar varias. */}
+              {canvas.sources.length > 0 && (
+                <span className="mt-0.5 block truncate text-xs text-ink-300">
+                  {canvas.sources.map((source) => source.name).join(" · ")}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => onDeleteCanvas(canvas.id)}
+              aria-label={`Borrar el lienzo ${canvas.name}`}
+              className="absolute top-1.5 right-1 rounded p-1 text-ink-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-alert"
+            >
+              <TrashIcon />
+            </button>
+          </div>
         ))}
       </div>
     </aside>

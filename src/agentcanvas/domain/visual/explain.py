@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from agentcanvas.domain.visual.spec import (
     Aggregation,
+    ChartType,
     Dimension,
     Filter,
     FilterOperator,
@@ -118,6 +119,21 @@ def _grain_lines(dimensions: tuple[Dimension, ...]) -> list[str]:
 
 
 def _aggregation_lines(spec: VisualSpec) -> list[str]:
+    if spec.type is ChartType.BOX:
+        assert spec.x is not None
+        column = spec.y[0].field
+        return [
+            "",
+            "# Las cinco cifras de cada caja",
+            f"resultado = df.groupby({spec.x.key!r}, dropna=False, observed=True)[{column!r}].agg(",
+            "    minimo='min',",
+            "    q1=lambda valores: valores.quantile(0.25),",
+            "    mediana='median',",
+            "    q3=lambda valores: valores.quantile(0.75),",
+            "    maximo='max',",
+            ").reset_index()",
+        ]
+
     if spec.is_raw:
         keys = [d.key for d in spec.dimensions] + [m.key for m in spec.y]
         return ["", "# Filas sin agregar", f"resultado = df[{keys!r}].copy()"]

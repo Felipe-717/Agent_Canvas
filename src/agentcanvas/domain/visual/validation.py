@@ -180,6 +180,24 @@ def _chart_shape_problems(spec: VisualSpec) -> list[str]:
             )
         return problems
 
+    if spec.type is ChartType.BOX:
+        if measures != 1:
+            problems.append(
+                "Una caja resume una sola columna: pon exactamente una medida"
+            )
+        if spec.x is None:
+            problems.append(
+                "Una caja necesita una columna que defina las categorias, una caja por cada una"
+            )
+        if spec.group_by is not None:
+            problems.append("Una caja no admite agrupacion adicional")
+        if spec.y and spec.y[0].aggregation is not Aggregation.NONE:
+            problems.append(
+                "Una caja resume los valores en crudo: su medida debe usar la "
+                "agregacion 'none', porque el resumen lo calcula el propio grafico"
+            )
+        return problems
+
     if spec.type is ChartType.TABLE:
         if measures == 0 and not spec.dimensions:
             problems.append("Una tabla necesita al menos una columna")
@@ -220,8 +238,16 @@ def _sort_problems(spec: VisualSpec) -> list[str]:
     return []
 
 
+BOX_KEYS: tuple[str, ...] = ("minimo", "q1", "mediana", "q3", "maximo")
+"""Las cinco cifras de una caja. Nombres fijos: el grafico siempre las quiere
+en el mismo orden, y derivarlas del nombre de la columna solo complicaria la
+lectura del resultado."""
+
+
 def result_keys(spec: VisualSpec) -> tuple[str, ...]:
     """Columnas que tendra el resultado de ejecutar la spec."""
+    if spec.type is ChartType.BOX:
+        return ((spec.x.key,) if spec.x else ()) + BOX_KEYS
     keys = [dimension.key for dimension in spec.dimensions]
     keys.extend(measure.key for measure in spec.y)
     return tuple(dict.fromkeys(keys))
@@ -229,6 +255,10 @@ def result_keys(spec: VisualSpec) -> tuple[str, ...]:
 
 def result_type(spec: VisualSpec, key: str, schema: DatasetSchema) -> ColumnType:
     """Tipo de una columna del resultado."""
+    if spec.type is ChartType.BOX and key in BOX_KEYS:
+        # Los cuartiles interpolan, asi que aunque la columna sea entera el
+        # resultado no tiene por que serlo.
+        return ColumnType.FLOAT
     for dimension in spec.dimensions:
         if dimension.key == key:
             column = schema.get(dimension.field)

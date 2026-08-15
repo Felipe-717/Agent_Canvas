@@ -25,6 +25,8 @@ class ChartType(StrEnum):
     AREA = "area"
     PIE = "pie"
     SCATTER = "scatter"
+    BOX = "box"
+    """Cajas y bigotes: resume la distribucion de una columna por categoria."""
     KPI = "kpi"
     TABLE = "table"
 
@@ -168,7 +170,14 @@ class VisualSpec(BaseModel):
 
     @property
     def is_raw(self) -> bool:
-        """True si la spec pide filas sin agregar."""
+        """True si la spec pide filas sin agregar.
+
+        Una caja tambien declara sus medidas sin agregar -son los valores en
+        crudo los que se resumen- pero no devuelve filas sueltas, asi que se
+        excluye aqui.
+        """
+        if self.type is ChartType.BOX:
+            return False
         return bool(self.y) and all(m.aggregation is Aggregation.NONE for m in self.y)
 
     @property

@@ -19,6 +19,7 @@ from agentcanvas.domain.dataset.schema import DatasetSchema
 from agentcanvas.domain.visual.result import ResultColumn, VisualData
 from agentcanvas.domain.visual.spec import (
     Aggregation,
+    ChartType,
     Dimension,
     Filter,
     FilterOperator,
@@ -76,7 +77,12 @@ class PandasQueryEngine:
         frame = _apply_filters(frame, spec.filters, schema)
         frame = _apply_time_grains(frame, spec.dimensions)
 
-        result = _select_raw(frame, spec) if spec.is_raw else _aggregate(frame, spec)
+        if spec.type is ChartType.BOX:
+            result = _summarise(frame, spec)
+        elif spec.is_raw:
+            result = _select_raw(frame, spec)
+        else:
+            result = _aggregate(frame, spec)
         result = _apply_sort(result, spec)
         result, truncated = _apply_limit(result, spec)
 
@@ -191,6 +197,28 @@ def _aggregation_for(measure: Measure) -> tuple[str, str]:
 
 def _apply_aggregation(frame: pd.DataFrame, column: str, function: str) -> Any:
     return getattr(frame[column], function)()
+
+
+def _summarise(frame: pd.DataFrame, spec: VisualSpec) -> pd.DataFrame:
+    """Las cinco cifras de una caja, por categoria.
+
+    Se usa el metodo lineal de cuartiles, que es el que usan pandas, numpy y R
+    por defecto: con muestras pequenas los metodos difieren y conviene que el
+    numero coincida con lo que el usuario obtendria por su cuenta.
+    """
+    assert spec.x is not None
+    column = spec.y[0].field
+    assert column is not None
+
+    grouped = frame.groupby(spec.x.key, dropna=False, observed=True)[column]
+    result = grouped.agg(
+        minimo="min",
+        q1=lambda values: values.quantile(0.25),
+        mediana="median",
+        q3=lambda values: values.quantile(0.75),
+        maximo="max",
+    )
+    return result.reset_index()
 
 
 def _select_raw(frame: pd.DataFrame, spec: VisualSpec) -> pd.DataFrame:

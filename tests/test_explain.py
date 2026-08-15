@@ -237,3 +237,16 @@ def test_the_code_reads_like_something_a_person_would_write() -> None:
     assert "# Agregacion" in code
     assert "# Recorte" in code
     assert "ventas.parquet" in code
+
+
+def test_a_box_plot_matches(dataset: tuple[Path, NormalizedTable]) -> None:
+    # Las cinco cifras tambien tienen que salir iguales por los dos caminos.
+    _assert_matches(
+        dataset,
+        VisualSpec(
+            type=ChartType.BOX,
+            title="x",
+            x=Dimension(field="region"),
+            y=(Measure(field="valor", aggregation=Aggregation.NONE),),
+        ),
+    )

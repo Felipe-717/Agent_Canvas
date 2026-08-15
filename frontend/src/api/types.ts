@@ -5,7 +5,15 @@
  * es un grafico vacio, asi que conviene que rompan en tiempo de compilacion.
  */
 
-export type ChartType = "line" | "bar" | "area" | "pie" | "scatter" | "kpi" | "table";
+export type ChartType =
+  | "line"
+  | "bar"
+  | "area"
+  | "pie"
+  | "scatter"
+  | "box"
+  | "kpi"
+  | "table";
 
 export type Aggregation =
   | "sum"
