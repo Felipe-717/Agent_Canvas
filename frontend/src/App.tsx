@@ -10,6 +10,7 @@ import type {
 import { Board } from "./components/Board";
 import { Chat } from "./components/Chat";
 import { Sidebar } from "./components/Sidebar";
+import { Sources } from "./components/Sources";
 
 type View = { kind: "chat" } | { kind: "canvas"; id: string };
 
@@ -156,14 +157,19 @@ export default function App() {
               ? conversations.find((c) => c.id === active)?.title ?? "AgentCanvas"
               : canvas?.dashboard.name}
           </span>
-          {view.kind === "canvas" && (
-            <button
-              type="button"
-              onClick={() => setView({ kind: "chat" })}
-              className="rounded px-2 py-1 text-xs text-ink-400 transition-colors hover:bg-bone-200 hover:text-ink-900"
-            >
-              Volver al chat
-            </button>
+          {view.kind === "canvas" && canvas && (
+            <div className="flex items-center gap-3">
+              {/* Cada fuente se actualiza por su cuenta: un lienzo puede
+                  mezclar varias y no todas cambian a la vez. */}
+              <Sources sources={canvas.sources} onRefreshed={() => void refreshCanvas()} />
+              <button
+                type="button"
+                onClick={() => setView({ kind: "chat" })}
+                className="rounded px-2 py-1 text-xs text-ink-400 transition-colors hover:bg-bone-200 hover:text-ink-900"
+              >
+                Volver al chat
+              </button>
+            </div>
           )}
         </header>
 

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from agentcanvas import __version__
 from agentcanvas.bootstrap.container import Container, build_container
 from agentcanvas.infrastructure.web.errors import register_error_handlers
-from agentcanvas.infrastructure.web.routers import chat, dashboards
+from agentcanvas.infrastructure.web.routers import chat, dashboards, datasets
 
 # El frontend de desarrollo (Vite) vive en otro puerto.
 DEV_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
@@ -40,6 +40,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     register_error_handlers(app)
     app.include_router(dashboards.router)
     app.include_router(chat.router)
+    app.include_router(datasets.router)
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, object]:

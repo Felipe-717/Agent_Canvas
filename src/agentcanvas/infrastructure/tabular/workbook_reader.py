@@ -17,6 +17,7 @@ import pandas as pd
 
 from agentcanvas.application.ports.tabular import NormalizedTable
 from agentcanvas.domain.workbook.structure import (
+    CSV_SHEET,
     CellWindow,
     SheetOverview,
     TableSpec,
@@ -27,10 +28,6 @@ from agentcanvas.infrastructure.tabular.normalize import (
     logical_type,
     preview_rows_of,
 )
-
-CSV_SHEET = "datos"
-"""Nombre de hoja unico que se le da a un CSV, para que el resto del sistema
-no tenga que distinguir entre CSV y Excel."""
 
 _CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
 _MAX_SCAN_ROWS = 2000

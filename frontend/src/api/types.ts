@@ -128,13 +128,25 @@ export interface DashboardVisual {
   spec: VisualSpec;
   placement: Placement;
   data: VisualData | null;
-  /** Por que no se pudo calcular. Excluyente con `data`. */
+  /** El cálculo exacto en Python, generado de la especificación. */
+  code: string | null;
+  /** Por qué no se pudo calcular. Excluyente con `data`. */
   error: string | null;
+}
+
+export interface Source {
+  id: string;
+  name: string;
+  row_count: number;
+  /** Falso si no se guardó cómo se extrajo y no se puede releer solo. */
+  can_refresh: boolean;
 }
 
 export interface DashboardDetail {
   dashboard: DashboardSummary;
   visuals: DashboardVisual[];
+  /** De qué conjuntos bebe. Cada uno se actualiza por su cuenta. */
+  sources: Source[];
   grid_columns: number;
 }
 
@@ -172,6 +184,8 @@ export interface Artifact {
   origin: string | null;
   spec: VisualSpec | null;
   data: VisualData | null;
+  /** El cálculo exacto en Python, generado de la especificación. */
+  code: string | null;
   error: string | null;
 }
 
@@ -197,6 +211,6 @@ export interface CanvasSummary {
   name: string;
   visual_count: number;
   /** Un lienzo puede mezclar orígenes: cada visual guarda el suyo. */
-  sources: { id: string; name: string }[];
+  sources: Source[];
   updated_at: string;
 }

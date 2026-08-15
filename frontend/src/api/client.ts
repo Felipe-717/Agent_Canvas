@@ -177,6 +177,16 @@ export const api = {
       body: JSON.stringify({ items }),
     }),
 
+  /** Relee el archivo nuevo con las mismas coordenadas que la primera vez. */
+  refreshSource(datasetId: string, file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return request<{ row_count: number; previous_rows: number; name: string }>(
+      `/api/datasets/${datasetId}/refresh`,
+      { method: "POST", body: form },
+    );
+  },
+
   removeVisual: (canvasId: string, visualId: string) =>
     request<void>(`/api/dashboards/${canvasId}/visuals/${visualId}`, { method: "DELETE" }),
 };

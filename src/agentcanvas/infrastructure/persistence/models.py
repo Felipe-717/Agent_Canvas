@@ -16,6 +16,7 @@ from agentcanvas.domain.chat.entities import MessageContent
 from agentcanvas.domain.dataset.schema import DatasetSchema
 from agentcanvas.domain.visual.dashboard import Placement
 from agentcanvas.domain.visual.spec import VisualSpec
+from agentcanvas.domain.workbook.structure import TableSpec
 from agentcanvas.infrastructure.persistence.types import PydanticJSON
 
 
@@ -45,6 +46,12 @@ class DatasetRow(Base):
     owner_id: Mapped[str] = mapped_column(String(64), index=True)
     name: Mapped[str] = mapped_column(String(255))
     schema_json: Mapped[DatasetSchema] = mapped_column(PydanticJSON(DatasetSchema))
+    table_spec: Mapped[TableSpec | None] = mapped_column(
+        PydanticJSON(TableSpec), nullable=True
+    )
+    """Como se recorto la tabla del archivo. Es lo que permite releer el
+    archivo del mes siguiente exactamente igual."""
+
     fingerprint: Mapped[str] = mapped_column(String(32))
     """Denormalizado desde el schema: permite buscar datasets compatibles sin
     deserializar todos los schemas del usuario."""

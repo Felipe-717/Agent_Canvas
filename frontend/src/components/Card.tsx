@@ -9,12 +9,14 @@ export function Card({
   subtitle,
   actions,
   children,
+  footer,
   dragHandle = false,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
+  footer?: ReactNode;
   dragHandle?: boolean;
 }) {
   return (
@@ -31,6 +33,7 @@ export function Card({
         {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
       </header>
       <div className="min-h-0 flex-1 p-2">{children}</div>
+      {footer}
     </div>
   );
 }

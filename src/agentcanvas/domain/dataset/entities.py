@@ -21,6 +21,7 @@ from agentcanvas.domain.dataset.errors import SchemaMismatchError
 from agentcanvas.domain.dataset.schema import DatasetSchema
 from agentcanvas.domain.shared.clock import utcnow
 from agentcanvas.domain.shared.identifiers import new_id
+from agentcanvas.domain.workbook.structure import TableSpec
 
 SUPPORTED_EXTENSIONS: tuple[str, ...] = (".csv", ".xlsx")
 
@@ -68,6 +69,13 @@ class Dataset(BaseModel):
     name: str
     schema_: DatasetSchema = Field(alias="schema")
     """`schema` colisiona con BaseModel.schema; el alias mantiene el JSON limpio."""
+
+    table_spec: TableSpec | None = None
+    """Como se recorto la tabla del archivo original.
+
+    Sin esto, actualizar con el archivo del mes siguiente obligaria a volver a
+    averiguar donde estaba la tabla, y nada garantiza que se decidiera igual.
+    Guardarlo es lo que hace que "actualizar" sea reproducible y gratis."""
 
     current_version_id: str | None = None
     row_count: int = 0

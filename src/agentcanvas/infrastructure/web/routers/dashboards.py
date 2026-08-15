@@ -5,13 +5,34 @@ from datetime import datetime
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
-from agentcanvas.application.use_cases.dashboards import DashboardView, RenderedVisual
+from agentcanvas.application.use_cases.dashboards import (
+    DashboardView,
+    DatasetRef,
+    RenderedVisual,
+)
 from agentcanvas.domain.visual.dashboard import GRID_COLUMNS, Dashboard, Placement
+from agentcanvas.domain.visual.explain import as_python
 from agentcanvas.domain.visual.result import VisualData
 from agentcanvas.domain.visual.spec import VisualSpec
 from agentcanvas.infrastructure.web.dependencies import ContainerDep, OwnerDep, SessionDep
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
+
+
+class SourceOut(BaseModel):
+    id: str
+    name: str
+    row_count: int = 0
+    can_refresh: bool = True
+
+    @classmethod
+    def of(cls, source: DatasetRef) -> SourceOut:
+        return cls(
+            id=source.id,
+            name=source.name,
+            row_count=source.row_count,
+            can_refresh=source.can_refresh,
+        )
 
 
 class DashboardIn(BaseModel):
@@ -55,6 +76,9 @@ class VisualOut(BaseModel):
     spec: VisualSpec
     placement: Placement
     data: VisualData | None = None
+    code: str | None = None
+    """El calculo exacto en Python, generado de la spec."""
+
     error: str | None = None
 
     @classmethod
@@ -66,6 +90,7 @@ class VisualOut(BaseModel):
             spec=visual.spec,
             placement=visual.placement,
             data=rendered.data,
+            code=as_python(visual.spec),
             error=rendered.error,
         )
 
@@ -73,6 +98,9 @@ class VisualOut(BaseModel):
 class DashboardDetailOut(BaseModel):
     dashboard: DashboardOut
     visuals: list[VisualOut]
+    sources: list[SourceOut]
+    """De que conjuntos bebe. Se actualizan uno a uno desde la cabecera."""
+
     grid_columns: int = GRID_COLUMNS
     """El frontend necesita la misma rejilla que el dominio para no descuadrar."""
 
@@ -81,6 +109,7 @@ class DashboardDetailOut(BaseModel):
         return cls(
             dashboard=DashboardOut.of(view.dashboard),
             visuals=[VisualOut.of(rendered) for rendered in view.visuals],
+            sources=[SourceOut.of(source) for source in view.sources],
         )
 
 
@@ -89,11 +118,6 @@ async def create(
     body: DashboardIn, container: ContainerDep, session: SessionDep, owner_id: OwnerDep
 ) -> DashboardOut:
     return DashboardOut.of(await container.dashboards(session).create(owner_id, body.name))
-
-
-class SourceOut(BaseModel):
-    id: str
-    name: str
 
 
 class DashboardListItemOut(BaseModel):
@@ -120,7 +144,7 @@ async def list_dashboards(
             id=summary.dashboard.id,
             name=summary.dashboard.name,
             visual_count=summary.visual_count,
-            sources=[SourceOut(id=source.id, name=source.name) for source in summary.sources],
+            sources=[SourceOut.of(source) for source in summary.sources],
             updated_at=summary.dashboard.updated_at,
         )
         for summary in summaries

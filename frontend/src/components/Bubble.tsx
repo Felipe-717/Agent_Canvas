@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { Artifact, CanvasSummary, Message } from "../api/types";
+import { HowItWorks } from "./HowItWorks";
 import { PaperclipIcon, PinIcon, TableIcon } from "./Icons";
+import { Markdown } from "./Markdown";
 import { Visual } from "./Visual";
 
 /** Un mensaje de la conversación, con lo que el asistente haya producido.
@@ -22,13 +24,19 @@ export function Bubble({
     <div className={`flex flex-col gap-2 ${mine ? "items-end" : "items-start"}`}>
       {(message.text || message.attachments.length > 0) && (
         <div
-          className={`max-w-[46rem] rounded-card px-3.5 py-2.5 text-sm whitespace-pre-wrap ${
+          className={`max-w-[46rem] rounded-card px-3.5 py-2.5 ${
             mine
               ? "bg-clay-500 text-bone-50"
               : "border border-bone-300 bg-bone-50 text-ink-900"
           }`}
         >
-          {message.text}
+          {/* El asistente escribe en markdown; sin renderizar se ven los
+              asteriscos, que es peor que si no los hubiera puesto. */}
+          {mine ? (
+            <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+          ) : (
+            <Markdown text={message.text} />
+          )}
           {message.attachments.map((attachment) => (
             <span
               key={attachment.file_id}
@@ -188,6 +196,9 @@ function VisualCard({
           </div>
         )}
       </div>
+
+      {/* El cálculo exacto, para quien quiera comprobarlo. */}
+      <HowItWorks code={artifact.code} />
     </div>
   );
 }

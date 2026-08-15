@@ -5,6 +5,7 @@ import "react-grid-layout/css/styles.css";
 import { api } from "../api/client";
 import type { DashboardDetail } from "../api/types";
 import { Card, IconButton } from "./Card";
+import { HowItWorks } from "./HowItWorks";
 import { GridIcon, TrashIcon } from "./Icons";
 import { Visual } from "./Visual";
 
@@ -92,6 +93,7 @@ export function Board({
               dragHandle
               title={visual.spec.title}
               subtitle={visual.error ? undefined : visual.spec.type}
+              footer={<HowItWorks code={visual.code} />}
               actions={
                 <IconButton
                   label="Quitar del panel"

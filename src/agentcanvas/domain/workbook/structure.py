@@ -13,6 +13,12 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+CSV_SHEET = "datos"
+"""Nombre de hoja unico que se le da a un CSV.
+
+Asi el resto del sistema no tiene que distinguir entre CSV y Excel: un CSV
+es un libro de una sola hoja."""
+
 
 class TableSpec(BaseModel):
     """Coordenadas de una tabla dentro de un libro. Todo en base 1, como Excel.

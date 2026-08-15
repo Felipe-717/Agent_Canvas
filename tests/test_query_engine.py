@@ -23,12 +23,9 @@ from agentcanvas.domain.visual.spec import (
     TimeGrain,
     VisualSpec,
 )
-from agentcanvas.domain.workbook.structure import TableSpec
+from agentcanvas.domain.workbook.structure import CSV_SHEET, TableSpec
 from agentcanvas.infrastructure.query.pandas_engine import PandasQueryEngine
-from agentcanvas.infrastructure.tabular.workbook_reader import (
-    CSV_SHEET,
-    OpenpyxlWorkbookReader,
-)
+from agentcanvas.infrastructure.tabular.workbook_reader import OpenpyxlWorkbookReader
 
 VENTAS = (
     b"fecha,region,producto,cantidad,valor\n"

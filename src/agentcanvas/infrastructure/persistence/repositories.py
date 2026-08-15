@@ -82,6 +82,7 @@ class SqlAlchemyDatasetRepository:
                 owner_id=dataset.owner_id,
                 name=dataset.name,
                 schema_json=dataset.schema_,
+                table_spec=dataset.table_spec,
                 fingerprint=dataset.fingerprint,
                 current_version_id=dataset.current_version_id,
                 row_count=dataset.row_count,
@@ -97,6 +98,7 @@ class SqlAlchemyDatasetRepository:
             raise LookupError(f"El dataset {dataset.id} no existe")
         row.name = dataset.name
         row.schema_json = dataset.schema_
+        row.table_spec = dataset.table_spec
         row.fingerprint = dataset.fingerprint
         row.current_version_id = dataset.current_version_id
         row.row_count = dataset.row_count
@@ -172,6 +174,7 @@ def _to_dataset(row: DatasetRow) -> Dataset:
         owner_id=row.owner_id,
         name=row.name,
         schema=row.schema_json,
+        table_spec=row.table_spec,
         current_version_id=row.current_version_id,
         row_count=row.row_count,
         created_at=aware(row.created_at),

@@ -19,6 +19,7 @@ from agentcanvas.domain.chat.entities import (
     VisualArtifact,
 )
 from agentcanvas.domain.shared.errors import DomainError
+from agentcanvas.domain.visual.explain import as_python
 from agentcanvas.domain.visual.result import VisualData
 from agentcanvas.domain.visual.spec import VisualSpec
 from agentcanvas.infrastructure.web.dependencies import ContainerDep, OwnerDep, SessionDep
@@ -66,6 +67,10 @@ class ArtifactOut(BaseModel):
     origin: str | None = None
     spec: VisualSpec | None = None
     data: VisualData | None = None
+    code: str | None = None
+    """El calculo exacto en Python. Se genera de la spec y hay un test que lo
+    ejecuta y compara con el motor, asi que no puede mentir."""
+
     error: str | None = None
 
 
@@ -275,6 +280,7 @@ def _artifact(artifact: Any, data: VisualData | None, error: str | None) -> Arti
             dataset_id=artifact.dataset_id,
             spec=artifact.spec,
             data=data,
+            code=as_python(artifact.spec),
             error=error,
         )
     return ArtifactOut(kind="unknown", dataset_id="")

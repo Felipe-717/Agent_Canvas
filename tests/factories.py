@@ -10,9 +10,8 @@ from __future__ import annotations
 from agentcanvas.bootstrap.container import Container
 from agentcanvas.domain.dataset.entities import Dataset
 from agentcanvas.domain.shared.identifiers import new_id
-from agentcanvas.domain.workbook.structure import TableSpec
+from agentcanvas.domain.workbook.structure import CSV_SHEET, TableSpec
 from agentcanvas.infrastructure.persistence.repositories import SqlAlchemyDatasetRepository
-from agentcanvas.infrastructure.tabular.workbook_reader import CSV_SHEET
 
 
 async def make_dataset(

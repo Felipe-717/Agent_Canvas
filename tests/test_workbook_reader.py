@@ -12,11 +12,8 @@ from pathlib import Path
 import openpyxl
 import pytest
 
-from agentcanvas.domain.workbook.structure import TableSpec
-from agentcanvas.infrastructure.tabular.workbook_reader import (
-    CSV_SHEET,
-    OpenpyxlWorkbookReader,
-)
+from agentcanvas.domain.workbook.structure import CSV_SHEET, TableSpec
+from agentcanvas.infrastructure.tabular.workbook_reader import OpenpyxlWorkbookReader
 
 
 @pytest.fixture

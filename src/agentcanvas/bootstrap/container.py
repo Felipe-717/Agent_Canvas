@@ -18,6 +18,7 @@ from agentcanvas.application.ports.storage import FileStoragePort
 from agentcanvas.application.ports.workbook import WorkbookReaderPort
 from agentcanvas.application.use_cases.chat import ChatService
 from agentcanvas.application.use_cases.dashboards import DashboardService
+from agentcanvas.application.use_cases.refresh import RefreshDatasetUseCase
 from agentcanvas.config import Settings, get_settings
 from agentcanvas.infrastructure.llm.factory import build_llm
 from agentcanvas.infrastructure.persistence.conversations import (
@@ -54,6 +55,15 @@ class Container:
             storage=self.storage,
             workbook=self.workbook,
             engine=self.query_engine,
+            uow=SqlAlchemyUnitOfWork(session),
+        )
+
+    def refresh_dataset(self, session: AsyncSession) -> RefreshDatasetUseCase:
+        return RefreshDatasetUseCase(
+            datasets=SqlAlchemyDatasetRepository(session),
+            files=SqlAlchemyStoredFileRepository(session),
+            storage=self.storage,
+            workbook=self.workbook,
             uow=SqlAlchemyUnitOfWork(session),
         )
 

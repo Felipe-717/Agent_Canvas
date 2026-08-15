@@ -73,3 +73,15 @@ export const SendIcon = () => (
     <path d="M4 10l12-6-4.5 12L9 11z" />
   </Svg>
 );
+
+export const CodeIcon = () => (
+  <Svg>
+    <path d="M7 6l-3 4 3 4M13 6l3 4-3 4" />
+  </Svg>
+);
+
+export const RefreshIcon = () => (
+  <Svg>
+    <path d="M16 10a6 6 0 1 1-1.8-4.3M16 3v3h-3" />
+  </Svg>
+);

@@ -33,18 +33,24 @@ class RenderedVisual(BaseModel):
     """Por que no se pudo calcular. Excluyente con `data`."""
 
 
-class DashboardView(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    dashboard: Dashboard
-    visuals: tuple[RenderedVisual, ...]
-
-
 class DatasetRef(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: str
     name: str
+    row_count: int = 0
+    can_refresh: bool = True
+    """Falso si no se guardo como se extrajo del archivo y no se puede releer."""
+
+
+class DashboardView(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    dashboard: Dashboard
+    visuals: tuple[RenderedVisual, ...]
+    sources: tuple[DatasetRef, ...] = ()
+    """De que conjuntos bebe. Un lienzo puede mezclar varios y cada uno se
+    actualiza por su cuenta."""
 
 
 class DashboardSummary(BaseModel):
@@ -115,6 +121,8 @@ class DashboardService:
             refs[visual.dataset_id] = DatasetRef(
                 id=visual.dataset_id,
                 name=dataset.name if dataset else "(origen eliminado)",
+                row_count=dataset.row_count if dataset else 0,
+                can_refresh=dataset is not None and dataset.table_spec is not None,
             )
         return tuple(refs.values())
 
@@ -182,11 +190,13 @@ class DashboardService:
     async def open(self, owner_id: str, dashboard_id: str) -> DashboardView:
         """Recalcula el dashboard entero contra los datos actuales."""
         dashboard = await self._require(owner_id, dashboard_id)
-        rendered = [
-            await self._render(visual)
-            for visual in await self._dashboards.list_visuals(dashboard_id)
-        ]
-        return DashboardView(dashboard=dashboard, visuals=tuple(rendered))
+        visuals = await self._dashboards.list_visuals(dashboard_id)
+        rendered = [await self._render(visual) for visual in visuals]
+        return DashboardView(
+            dashboard=dashboard,
+            visuals=tuple(rendered),
+            sources=await self._sources(visuals),
+        )
 
     async def _render(self, visual: Visual) -> RenderedVisual:
         dataset = await self._datasets.get(visual.dataset_id)

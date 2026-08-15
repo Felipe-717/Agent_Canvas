@@ -359,7 +359,11 @@ class ChatService:
 
             name = str(arguments.get("nombre") or "").strip() or spec.sheet
             dataset = Dataset(
-                id=dataset_id, owner_id=owner_id, name=name, schema=table.schema_
+                id=dataset_id,
+                owner_id=owner_id,
+                name=name,
+                schema=table.schema_,
+                table_spec=spec,
             )
             version = dataset.new_version(
                 source_file_id=stored.id,
