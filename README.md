@@ -52,29 +52,25 @@ Windows por defecto, no admite `&&` para encadenar.
 
 ```powershell
 conda env create -f environment.yml
-conda activate agentcanvas
 copy .env.example .env
-alembic upgrade head
-pytest
+$env:USERPROFILE\anaconda3\envs\agentcanvas\python.exe -m alembic upgrade head
+$env:USERPROFILE\anaconda3\envs\agentcanvas\python.exe -m pytest -q
 ```
 
 Falta poner la clave de OpenAI en `LLM_API_KEY` dentro del `.env`.
 
 Si `conda activate` responde que no reconoce el comando, es que conda no esta en
-el PATH de esa terminal. Se arregla de una vez con `conda init powershell` y
-abriendo una terminal nueva, o se evita usando el interprete del entorno
-directamente:
-
-```powershell
-& "$env:USERPROFILE\anaconda3\envs\agentcanvas\python.exe" -m uvicorn agentcanvas.main:app --reload
-```
+el PATH de esa terminal. Se arregla de una vez con
+`$env:USERPROFILE\anaconda3\Scripts\conda.exe init powershell` y abriendo una
+terminal nueva; o se evita del todo llamando al interprete del entorno por su
+ruta, que es lo que hacen los comandos de abajo.
 
 ### Levantar la aplicacion
 
 Hacen falta dos terminales. La primera, la API:
 
 ```powershell
-uvicorn agentcanvas.main:app --reload
+$env:USERPROFILE\anaconda3\envs\agentcanvas\python.exe -m uvicorn agentcanvas.main:app --reload
 ```
 
 La segunda, el frontend:
@@ -91,7 +87,7 @@ la API en http://127.0.0.1:8000/docs
 Es lo unico del repositorio que gasta cuota. Alrededor de $0.0004 por peticion.
 
 ```powershell
-python scripts/smoke_visual.py "top 3 productos por venta"
+$env:USERPROFILE\anaconda3\envs\agentcanvas\python.exe scripts\smoke_visual.py "top 3 productos por venta"
 ```
 
 ## Modelo de IA
