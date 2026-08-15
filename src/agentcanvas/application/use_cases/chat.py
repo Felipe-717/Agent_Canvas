@@ -227,21 +227,37 @@ class ChatService:
                 summary = "\n".join(_describe(artifact) for artifact in entry.artifacts)
                 messages.append(Message.assistant("\n".join(filter(None, [entry.text, summary]))))
 
-        available = await self._available_datasets(owner_id)
+        available = await self._prepared_here(history)
         if available:
             messages.append(Message.system(available))
         return messages
 
-    async def _available_datasets(self, owner_id: str) -> str:
-        datasets = await self._datasets.list_for_owner(owner_id)
-        if not datasets:
-            return ""
-        lines = [
-            f"- id {dataset.id}: '{dataset.name}', {dataset.row_count} filas, "
-            f"columnas: {', '.join(dataset.schema_.column_names)}"
-            for dataset in datasets[:10]
+    async def _prepared_here(self, history: list[ChatMessage]) -> str:
+        """Solo los datos preparados en esta conversacion.
+
+        Enumerar todos los del usuario hacia que el modelo diese por hecho un
+        trabajo que no habia hecho: veia un conjunto con el nombre del archivo
+        y respondia "ya esta preparado". Ademas mezclaba conversaciones que no
+        tienen nada que ver.
+        """
+        ids = [
+            artifact.dataset_id
+            for message in history
+            for artifact in message.artifacts
+            if isinstance(artifact, DatasetArtifact)
         ]
-        return "Conjuntos de datos ya preparados:\n" + "\n".join(lines)
+        lines: list[str] = []
+        for dataset_id in dict.fromkeys(ids):
+            dataset = await self._datasets.get(dataset_id)
+            if dataset is None:
+                continue
+            lines.append(
+                f"- id {dataset.id}: '{dataset.name}', {dataset.row_count} filas, "
+                f"columnas: {', '.join(dataset.schema_.column_names)}"
+            )
+        if not lines:
+            return ""
+        return "Conjuntos de datos preparados en esta conversacion:\n" + "\n".join(lines)
 
     async def _render(self, message: ChatMessage) -> RenderedMessage:
         data: dict[str, VisualData] = {}

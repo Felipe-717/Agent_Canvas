@@ -111,3 +111,16 @@ body {
   box-shadow: var(--shadow-lifted);
   z-index: 10;
 }
+
+/* Los tres puntos del "pensando". */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}

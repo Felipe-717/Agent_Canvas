@@ -143,3 +143,60 @@ export interface ApiError {
   detail: string;
   problems: string[];
 }
+
+/* --- Conversación --------------------------------------------------------- */
+
+export interface Conversation {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttachmentRef {
+  file_id: string;
+  filename: string;
+}
+
+/** Lo que el asistente produjo dentro de un mensaje.
+ *
+ * De un gráfico llega su `spec` (que es lo guardado) y sus `data` (que se
+ * acaban de calcular en el servidor). Si el origen ya no existe, llega `error`
+ * en lugar de datos. */
+export interface Artifact {
+  kind: "dataset" | "visual" | "unknown";
+  dataset_id: string;
+  name: string | null;
+  row_count: number | null;
+  columns: string[] | null;
+  origin: string | null;
+  spec: VisualSpec | null;
+  data: VisualData | null;
+  error: string | null;
+}
+
+export interface Message {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  attachments: AttachmentRef[];
+  artifacts: Artifact[];
+  created_at: string;
+}
+
+export interface Turn {
+  user_message: Message;
+  assistant_message: Message;
+  trace: Trace;
+}
+
+/* --- Lienzos -------------------------------------------------------------- */
+
+export interface CanvasSummary {
+  id: string;
+  name: string;
+  visual_count: number;
+  /** Un lienzo puede mezclar orígenes: cada visual guarda el suyo. */
+  sources: { id: string; name: string }[];
+  updated_at: string;
+}

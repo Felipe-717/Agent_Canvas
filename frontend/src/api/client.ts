@@ -1,19 +1,19 @@
 import type {
+  CanvasSummary,
+  Conversation,
   DashboardDetail,
-  DashboardSummary,
-  Dataset,
-  IngestResult,
+  Message,
   Placement,
-  VisualResult,
+  Turn,
   VisualSpec,
 } from "./types";
 
 /** Error del backend con su detalle intacto.
  *
- * El backend se toma la molestia de decir que columna falta; perder eso al
- * cruzar la frontera y mostrar "Error 422" seria tirar el trabajo. */
+ * El backend se toma la molestia de decir qué columna falta; perder eso al
+ * cruzar la frontera y mostrar "Error 422" sería tirar el trabajo. */
 export class ApiFailure extends Error {
-  // Campos declarados y asignados a mano: `erasableSyntaxOnly` prohibe las
+  // Campos declarados y asignados a mano: `erasableSyntaxOnly` prohíbe las
   // propiedades de constructor, que no son borrables por el transpilador.
   readonly status: number;
   readonly kind: string;
@@ -45,15 +45,14 @@ async function toFailure(response: Response): Promise<ApiFailure> {
     if (typeof body?.detail === "string") {
       return new ApiFailure(response.status, body.error ?? "Error", body.detail, body.problems ?? []);
     }
-    // Los errores de validacion de FastAPI traen otra forma.
     if (Array.isArray(body?.detail)) {
-      const problems = body.detail.map((issue: { msg?: string }) => issue.msg ?? "invalido");
-      return new ApiFailure(response.status, "ValidationError", "Peticion invalida", problems);
+      const problems = body.detail.map((issue: { msg?: string }) => issue.msg ?? "inválido");
+      return new ApiFailure(response.status, "ValidationError", "Petición inválida", problems);
     }
   } catch {
     /* respuesta sin JSON */
   }
-  return new ApiFailure(response.status, "Error", `El servidor respondio ${response.status}`);
+  return new ApiFailure(response.status, "Error", `El servidor respondió ${response.status}`);
 }
 
 function json(body: unknown): RequestInit {
@@ -65,51 +64,58 @@ function json(body: unknown): RequestInit {
 }
 
 export const api = {
-  listDatasets: () => request<Dataset[]>("/api/datasets"),
+  /* --- conversación --- */
 
-  getDataset: (id: string) => request<Dataset>(`/api/datasets/${id}`),
+  listConversations: () => request<Conversation[]>("/api/conversations"),
 
-  upload(file: File, options: { datasetId?: string; name?: string } = {}) {
+  startConversation: () => request<Conversation>("/api/conversations", { method: "POST" }),
+
+  messages: (id: string) => request<Message[]>(`/api/conversations/${id}/messages`),
+
+  deleteConversation: (id: string) =>
+    request<void>(`/api/conversations/${id}`, { method: "DELETE" }),
+
+  /** El texto y el adjunto viajan juntos: así funciona un chat. */
+  send(conversationId: string, text: string, file: File | null) {
     const form = new FormData();
-    form.append("file", file);
-    if (options.datasetId) form.append("dataset_id", options.datasetId);
-    if (options.name) form.append("name", options.name);
-    return request<IngestResult>("/api/datasets", { method: "POST", body: form });
+    form.append("text", text);
+    if (file) form.append("file", file);
+    return request<Turn>(`/api/conversations/${conversationId}/messages`, {
+      method: "POST",
+      body: form,
+    });
   },
 
-  createVisual: (datasetId: string, instruction: string) =>
-    request<VisualResult>(`/api/datasets/${datasetId}/visuals`, json({ instruction })),
+  /* --- lienzos --- */
 
-  render: (datasetId: string, spec: VisualSpec) =>
-    request<VisualResult>(`/api/datasets/${datasetId}/render`, json({ spec })),
+  listCanvases: () => request<CanvasSummary[]>("/api/dashboards"),
 
-  listDashboards: () => request<DashboardSummary[]>("/api/dashboards"),
+  createCanvas: (name: string) => request<{ id: string }>("/api/dashboards", json({ name })),
 
-  createDashboard: (name: string) =>
-    request<DashboardSummary>("/api/dashboards", json({ name })),
+  openCanvas: (id: string) => request<DashboardDetail>(`/api/dashboards/${id}`),
 
-  openDashboard: (id: string) => request<DashboardDetail>(`/api/dashboards/${id}`),
-
-  renameDashboard: (id: string, name: string) =>
-    request<DashboardSummary>(`/api/dashboards/${id}`, {
+  renameCanvas: (id: string, name: string) =>
+    request<unknown>(`/api/dashboards/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     }),
 
-  addVisual: (dashboardId: string, datasetId: string, spec: VisualSpec) =>
+  deleteCanvas: (id: string) => request<void>(`/api/dashboards/${id}`, { method: "DELETE" }),
+
+  pin: (canvasId: string, datasetId: string, spec: VisualSpec) =>
     request<{ id: string }>(
-      `/api/dashboards/${dashboardId}/visuals`,
+      `/api/dashboards/${canvasId}/visuals`,
       json({ dataset_id: datasetId, spec }),
     ),
 
-  saveLayout: (dashboardId: string, items: { visual_id: string; placement: Placement }[]) =>
-    request<unknown>(`/api/dashboards/${dashboardId}/layout`, {
+  saveLayout: (canvasId: string, items: { visual_id: string; placement: Placement }[]) =>
+    request<unknown>(`/api/dashboards/${canvasId}/layout`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items }),
     }),
 
-  removeVisual: (dashboardId: string, visualId: string) =>
-    request<void>(`/api/dashboards/${dashboardId}/visuals/${visualId}`, { method: "DELETE" }),
+  removeVisual: (canvasId: string, visualId: string) =>
+    request<void>(`/api/dashboards/${canvasId}/visuals/${visualId}`, { method: "DELETE" }),
 };
