@@ -39,6 +39,7 @@ from agentcanvas.domain.chat.entities import (
     DatasetArtifact,
     MessageContent,
     MessageRole,
+    QueryArtifact,
     VisualArtifact,
 )
 from agentcanvas.domain.dataset.entities import Dataset, StoredFile
@@ -284,7 +285,7 @@ class ChatService:
         for index, artifact in enumerate(message.artifacts):
             key = str(index)
             try:
-                if isinstance(artifact, VisualArtifact):
+                if isinstance(artifact, VisualArtifact | QueryArtifact):
                     data[key] = await self._execute(artifact.dataset_id, artifact.spec)
                 elif isinstance(artifact, DatasetArtifact):
                     previews[key] = await self._preview(artifact.dataset_id)
@@ -465,7 +466,12 @@ class ChatService:
             computed = await _compute(arguments)
             if isinstance(computed, str):
                 return ToolOutcome(message=computed)
-            _, data = computed
+            spec, data = computed
+            # Queda registrada aunque la respuesta acabe siendo una frase: es lo
+            # unico que permite comprobar despues de donde salio la cifra.
+            collected.artifacts.append(
+                QueryArtifact(dataset_id=str(arguments["dataset_id"]), spec=spec)
+            )
             return ToolOutcome(message=_tabulate(data))
 
         async def crear_visual(arguments: dict[str, Any]) -> ToolOutcome:
@@ -623,6 +629,8 @@ def _describe(artifact: Any) -> str:
         )
     if isinstance(artifact, VisualArtifact):
         return f"[dibujado el grafico '{artifact.spec.title}' ({artifact.spec.type})]"
+    if isinstance(artifact, QueryArtifact):
+        return f"[consultado '{artifact.spec.title}']"
     return ""
 
 

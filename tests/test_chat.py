@@ -395,8 +395,14 @@ async def test_a_number_question_is_answered_from_a_query_not_a_chart(
 
     turn = await _send(client, conversation, "¿cuánto suman los valores?")
 
-    # Consultar no dibuja: la respuesta es una frase, no una tarjeta.
-    assert turn["assistant_message"]["artifacts"] == []
+    # Consultar no dibuja un grafico, pero deja constancia de la consulta: si
+    # no, una cifra escrita en el texto no se puede auditar despues.
+    (artefacto,) = turn["assistant_message"]["artifacts"]
+    assert artefacto["kind"] == "query"
+    assert artefacto["spec"]["title"] == "Total"
+    assert artefacto["data"]["rows"] == [{"sum_valor": 270}]
+    assert "df['valor'].sum()" in artefacto["code"]
+
     resultado = next(
         message.content
         for message in llm.requests[-1].messages

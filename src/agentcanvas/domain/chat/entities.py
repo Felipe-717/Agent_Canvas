@@ -70,7 +70,29 @@ class VisualArtifact(BaseModel):
     que hace que un grafico de hace un mes muestre las cifras de hoy."""
 
 
-Artifact = Annotated[DatasetArtifact | VisualArtifact, Field(discriminator="kind")]
+class QueryArtifact(BaseModel):
+    """Una cifra que el asistente consulto para poder responder en texto.
+
+    Existe porque una respuesta escrita no dejaba ningun rastro. El asistente
+    decia "virginica, 5,552 cm de media" y no habia forma de saber si lo habia
+    calculado o si lo recordaba: con un conjunto famoso como iris las dos cosas
+    dan el mismo numero, y con los datos de un usuario una de las dos miente.
+
+    Se guarda igual que un grafico -la especificacion, nunca los numeros- y se
+    recalcula al abrir. Asi cada cifra del texto tiene al lado la consulta que
+    la produjo y el Python que la calcula.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["query"] = "query"
+    dataset_id: str
+    spec: VisualSpec
+
+
+Artifact = Annotated[
+    DatasetArtifact | VisualArtifact | QueryArtifact, Field(discriminator="kind")
+]
 
 
 class MessageContent(BaseModel):
@@ -107,6 +129,10 @@ class ChatMessage(BaseModel):
     @property
     def visuals(self) -> tuple[VisualArtifact, ...]:
         return tuple(a for a in self.artifacts if isinstance(a, VisualArtifact))
+
+    @property
+    def queries(self) -> tuple[QueryArtifact, ...]:
+        return tuple(a for a in self.artifacts if isinstance(a, QueryArtifact))
 
     @property
     def datasets(self) -> tuple[DatasetArtifact, ...]:

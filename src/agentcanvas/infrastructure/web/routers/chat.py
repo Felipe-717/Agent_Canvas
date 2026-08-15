@@ -16,6 +16,7 @@ from agentcanvas.domain.chat.entities import (
     ChatMessage,
     Conversation,
     DatasetArtifact,
+    QueryArtifact,
     VisualArtifact,
 )
 from agentcanvas.domain.shared.errors import DomainError
@@ -291,6 +292,15 @@ def _artifact(
             origin=artifact.origin,
             warnings=list(artifact.warnings),
             preview=[dict(row) for row in preview],
+            error=error,
+        )
+    if isinstance(artifact, QueryArtifact):
+        return ArtifactOut(
+            kind="query",
+            dataset_id=artifact.dataset_id,
+            spec=artifact.spec,
+            data=data,
+            code=as_python(artifact.spec),
             error=error,
         )
     if isinstance(artifact, VisualArtifact):

@@ -184,7 +184,7 @@ export interface AttachmentRef {
  * acaban de calcular en el servidor). Si el origen ya no existe, llega `error`
  * en lugar de datos. */
 export interface Artifact {
-  kind: "dataset" | "visual" | "unknown";
+  kind: "dataset" | "visual" | "query" | "unknown";
   dataset_id: string;
   name: string | null;
   row_count: number | null;
