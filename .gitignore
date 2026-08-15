@@ -27,6 +27,11 @@ var/
 node_modules/
 frontend/dist/
 
+# Vídeos de demo: se suben como adjunto a GitHub, no al historial. Dieciocho
+# megas quedan en el repositorio para siempre aunque luego se borren.
+*.mp4
+*.mov
+
 # Editores / SO
 .vscode/
 .idea/

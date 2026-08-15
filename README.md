@@ -11,6 +11,14 @@ guardaste muestran los datos nuevos sin volver a pedirle nada al modelo.
 > contra archivos reales, pero no es un producto terminado. Al final del
 > documento están las cosas que todavía no hace bien.
 
+## Vídeo
+
+<!-- Sube Demo.mp4 arrastrandolo a un comentario de issue en GitHub y pega
+     aqui la URL https://github.com/user-attachments/assets/... que devuelve.
+     Puesta a pelo en su propia linea, GitHub la convierte en un reproductor. -->
+
+_(pendiente de subir)_
+
 ---
 
 ## El problema
