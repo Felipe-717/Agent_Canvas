@@ -369,3 +369,67 @@ async def _last_file(client: AsyncClient, conversation: str) -> str:
         if message["role"] == MessageRole.USER and message["attachments"]:
             return str(message["attachments"][0]["file_id"])
     raise AssertionError("no hay adjuntos en la conversacion")
+
+
+# ------------------------------------------------------- cifras, nunca de memoria
+
+
+async def test_a_number_question_is_answered_from_a_query_not_a_chart(
+    client: AsyncClient, llm: FakeLLM, excel: bytes
+) -> None:
+    conversation, dataset_id = await _with_dataset(client, llm, excel)
+    llm.queue(
+        tool_response(
+            "consultar_datos",
+            {
+                "dataset_id": dataset_id,
+                "especificacion": {
+                    "type": "kpi",
+                    "title": "Total",
+                    "y": [{"field": "valor", "aggregation": "sum"}],
+                },
+            },
+        ),
+        text_response("El total es 270."),
+    )
+
+    turn = await _send(client, conversation, "¿cuánto suman los valores?")
+
+    # Consultar no dibuja: la respuesta es una frase, no una tarjeta.
+    assert turn["assistant_message"]["artifacts"] == []
+    resultado = next(
+        message.content
+        for message in llm.requests[-1].messages
+        if message.content.startswith("Resultado")
+    )
+    # Y la cifra llega calculada, no recordada, con su cabecera: como repr de
+    # diccionarios el modelo dudaba y repetia la consulta.
+    assert "270" in resultado
+    assert "sum_valor" in resultado
+
+
+async def test_querying_an_unknown_dataset_points_to_preparing_it(
+    client: AsyncClient, llm: FakeLLM
+) -> None:
+    conversation = await _open(client)
+    llm.queue(
+        tool_response(
+            "consultar_datos",
+            {"dataset_id": "ds_no", "especificacion": VENTAS_POR_REGION},
+        ),
+        text_response("Necesito un archivo primero."),
+    )
+
+    await _send(client, conversation, "¿cuánto vendimos?")
+
+    feedback = next(m for m in llm.requests[-1].messages if "ds_no" in m.content)
+    assert "preparar_datos" in feedback.content
+
+
+def test_the_prompt_forbids_answering_figures_from_memory() -> None:
+    # El fallo que motivo la herramienta: con un conjunto famoso el modelo
+    # respondia la media correcta sin haber calculado nada.
+    from agentcanvas.agent.chat_prompt import SYSTEM_PROMPT
+
+    assert "NUNCA des una cifra" in SYSTEM_PROMPT
+    assert "consultar_datos" in SYSTEM_PROMPT

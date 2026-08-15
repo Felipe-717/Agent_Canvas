@@ -55,6 +55,9 @@ PREVIEW_ROWS = 4
 PREVIEW_COLUMNS = 8
 PREVIEW_CELL_WIDTH = 16
 MAX_SHEETS_PREVIEWED = 8
+MAX_QUERY_ROWS = 30
+"""Filas que se le devuelven al modelo en una consulta. Suficiente para
+responder una pregunta; mas seria pagar por contexto que no va a usar."""
 
 
 class ChatTurn(BaseModel):
@@ -386,26 +389,44 @@ class ChatService:
                 )
             )
 
-        async def crear_visual(arguments: dict[str, Any]) -> ToolOutcome:
+        async def _compute(arguments: dict[str, Any]) -> tuple[VisualSpec, VisualData] | str:
+            """Valida y ejecuta una spec. Devuelve el motivo si no se pudo."""
             dataset_id = str(arguments.get("dataset_id", ""))
             dataset = await self._datasets.get(dataset_id)
             if dataset is None or dataset.owner_id != owner_id:
-                return ToolOutcome(
-                    message=(
-                        f"No hay ningun conjunto de datos con id '{dataset_id}'. "
-                        "Prepara primero los datos con `preparar_datos`."
-                    )
+                return (
+                    f"No hay ningun conjunto de datos con id '{dataset_id}'. "
+                    "Prepara primero los datos con `preparar_datos`."
                 )
             try:
                 spec = VisualSpec.model_validate(arguments.get("especificacion", {}))
             except ValidationError as error:
-                return ToolOutcome(message=f"La especificacion no es valida: {error}")
+                return f"La especificacion no es valida: {error}"
 
             problems = validate_spec(spec, dataset.schema_)
             if problems:
-                return ToolOutcome(message="No se puede dibujar:\n- " + "\n- ".join(problems))
+                return "No se puede calcular:\n- " + "\n- ".join(problems)
+            return spec, await self._execute(dataset_id, spec)
 
-            data = await self._execute(dataset_id, spec)
+        async def consultar_datos(arguments: dict[str, Any]) -> ToolOutcome:
+            """Responde con numeros sin dibujar nada.
+
+            Existe porque sin ella el modelo respondia de memoria a preguntas
+            como "cual es la media": con un conjunto famoso acertaba, con los
+            datos de un usuario se habria inventado la cifra.
+            """
+            computed = await _compute(arguments)
+            if isinstance(computed, str):
+                return ToolOutcome(message=computed)
+            _, data = computed
+            return ToolOutcome(message=_tabulate(data))
+
+        async def crear_visual(arguments: dict[str, Any]) -> ToolOutcome:
+            computed = await _compute(arguments)
+            if isinstance(computed, str):
+                return ToolOutcome(message=computed.replace("calcular", "dibujar"))
+            spec, data = computed
+            dataset_id = str(arguments["dataset_id"])
             collected.artifacts.append(VisualArtifact(dataset_id=dataset_id, spec=spec))
             return ToolOutcome(
                 message=(
@@ -475,6 +496,24 @@ class ChatService:
                     activity="Preparando los datos de {hoja}",
                 ),
                 tool(
+                    name="consultar_datos",
+                    description=(
+                        "Calcula cifras sobre un conjunto preparado y las devuelve sin "
+                        "dibujar nada. Usalo siempre que necesites un numero para "
+                        "responder: nunca des cifras de memoria."
+                    ),
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "dataset_id": {"type": "string"},
+                            "especificacion": VisualSpec.model_json_schema(),
+                        },
+                        "required": ["dataset_id", "especificacion"],
+                    },
+                    handler=consultar_datos,
+                    activity="Consultando los datos",
+                ),
+                tool(
                     name="crear_visual",
                     description="Dibuja una visualizacion sobre un conjunto de datos preparado.",
                     parameters={
@@ -497,6 +536,36 @@ class _Collected:
 
     def __init__(self) -> None:
         self.artifacts: list[Any] = []
+
+
+def _tabulate(data: VisualData) -> str:
+    """El resultado de una consulta, en una tabla que se lee de un vistazo.
+
+    Devolverlo como repr de una lista de diccionarios obligaba al modelo a
+    descifrarlo, y ante la duda repetia la consulta. Una tabla con cabecera se
+    entiende a la primera y sale mas barata que tres reintentos.
+    """
+    if not data.rows:
+        return "La consulta no devuelve ninguna fila."
+
+    keys = [column.key for column in data.columns]
+    header = " | ".join(column.label for column in data.columns)
+    lines = [header, "-" * len(header)]
+    for row in data.rows[:MAX_QUERY_ROWS]:
+        lines.append(" | ".join(_cell(row.get(key)) for key in keys))
+    if len(data.rows) > MAX_QUERY_ROWS:
+        lines.append(f"… y {len(data.rows) - MAX_QUERY_ROWS} filas mas.")
+    return f"Resultado, {len(data.rows)} fila(s):\n" + "\n".join(lines)
+
+
+def _cell(value: object) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, float):
+        # Sin esto salen medias con dieciseis decimales, que el modelo copia
+        # tal cual en su respuesta.
+        return f"{value:.4g}"
+    return str(value)
 
 
 def _describe(artifact: Any) -> str:
