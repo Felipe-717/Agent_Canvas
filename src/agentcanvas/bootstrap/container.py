@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from agentcanvas.application.ports.query import QueryEnginePort
 from agentcanvas.application.ports.repositories import (
     DatasetRepositoryPort,
     StoredFileRepositoryPort,
@@ -20,6 +21,7 @@ from agentcanvas.application.ports.repositories import (
 from agentcanvas.application.ports.storage import FileStoragePort
 from agentcanvas.application.ports.tabular import TabularReaderPort
 from agentcanvas.application.use_cases.ingest_file import IngestFileUseCase
+from agentcanvas.application.use_cases.render_visual import RenderVisualUseCase
 from agentcanvas.config import Settings, get_settings
 from agentcanvas.infrastructure.persistence.repositories import (
     SqlAlchemyDatasetRepository,
@@ -27,6 +29,7 @@ from agentcanvas.infrastructure.persistence.repositories import (
     SqlAlchemyUnitOfWork,
 )
 from agentcanvas.infrastructure.persistence.session import build_engine, build_session_factory
+from agentcanvas.infrastructure.query.pandas_engine import PandasQueryEngine
 from agentcanvas.infrastructure.storage.local_file_storage import LocalFileStorage
 from agentcanvas.infrastructure.tabular.pandas_reader import PandasTabularReader
 
@@ -38,6 +41,15 @@ class Container:
     session_factory: async_sessionmaker[AsyncSession]
     storage: FileStoragePort
     reader: TabularReaderPort
+    query_engine: QueryEnginePort
+
+    def render_visual(self, session: AsyncSession) -> RenderVisualUseCase:
+        datasets: DatasetRepositoryPort = SqlAlchemyDatasetRepository(session)
+        return RenderVisualUseCase(
+            datasets=datasets,
+            storage=self.storage,
+            engine=self.query_engine,
+        )
 
     def ingest_file(self, session: AsyncSession) -> IngestFileUseCase:
         files: StoredFileRepositoryPort = SqlAlchemyStoredFileRepository(session)
@@ -58,10 +70,12 @@ def build_container(settings: Settings | None = None) -> Container:
     engine = build_engine(resolved.database_url, echo=resolved.debug)
     storage: FileStoragePort = LocalFileStorage(resolved.data_dir)
     reader: TabularReaderPort = PandasTabularReader()
+    query_engine: QueryEnginePort = PandasQueryEngine()
     return Container(
         settings=resolved,
         engine=engine,
         session_factory=build_session_factory(engine),
         storage=storage,
         reader=reader,
+        query_engine=query_engine,
     )
