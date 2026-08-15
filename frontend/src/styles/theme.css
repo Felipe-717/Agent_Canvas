@@ -1,0 +1,113 @@
+/* Paleta de AgentCanvas.
+ *
+ * Tesis, tomada del voicebot y adaptada: el cromo es neutro y el color
+ * saturado aparece solo donde significa algo. Aqui "donde significa algo" son
+ * los datos y las acciones; el resto es papel, tinta y sombra.
+ *
+ * Nada de neon. Los tonos vienen de materiales: hueso, arcilla, terracota,
+ * salvia, ocre. Son colores que ya tienen contraste entre si por temperatura y
+ * luminosidad, no por saturacion, asi que ocho series en un grafico siguen
+ * distinguiendose sin gritar.
+ */
+
+@import "tailwindcss";
+
+@theme {
+  /* --- Papel: fondos, de mas hundido a mas elevado --- */
+  --color-bone-50: #fdfbf7;
+  --color-bone-100: #f7f2e9;
+  --color-bone-200: #efe7da;
+  --color-bone-300: #e3d7c5;
+  --color-bone-400: #cdbca6;
+
+  /* --- Tinta: texto y trazos --- */
+  --color-ink-900: #241f1b;
+  --color-ink-700: #40382f;
+  --color-ink-500: #6b5f52;
+  --color-ink-400: #8b7d6d;
+  --color-ink-300: #a89a89;
+
+  /* --- Terracota: la accion. Un solo acento, usado con avaricia --- */
+  --color-clay-50: #fbf0e9;
+  --color-clay-300: #d99871;
+  --color-clay-500: #b85c38;
+  --color-clay-600: #a04e2f;
+  --color-clay-700: #833f26;
+
+  /* --- Estados. Apagados a proposito: un error no necesita ser rojo semaforo --- */
+  --color-alert: #a3432f;
+  --color-notice: #9a7524;
+  --color-ok: #5c7052;
+
+  /* --- Series de datos ---
+   * Ordenadas para que las dos primeras, que son las que mas se usan,
+   * contrasten al maximo entre si. */
+  --color-series-1: #b85c38;
+  --color-series-2: #4a5f6d;
+  --color-series-3: #c9973f;
+  --color-series-4: #6e7f62;
+  --color-series-5: #8c6a5d;
+  --color-series-6: #a8908c;
+  --color-series-7: #5f7470;
+  --color-series-8: #8a7449;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-card: 10px;
+
+  /* Sombras de papel: cortas y calidas, no halos negros */
+  --shadow-paper: 0 1px 2px rgba(36, 31, 27, 0.05), 0 2px 8px rgba(36, 31, 27, 0.04);
+  --shadow-lifted: 0 6px 24px rgba(36, 31, 27, 0.12);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bone-100);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numeros tabulares en todo lo que sea cifra: sin esto, una columna de valores
+ * baila al actualizarse. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* react-grid-layout trae su propio CSS, pero su estetica por defecto no encaja.
+ * Se reescribe lo minimo. */
+.react-grid-item.react-grid-placeholder {
+  background: var(--color-clay-300);
+  opacity: 0.25;
+  border-radius: var(--radius-card);
+}
+
+.react-grid-item > .react-resizable-handle {
+  width: 16px;
+  height: 16px;
+  right: 4px;
+  bottom: 4px;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--color-ink-300);
+  border-bottom: 1.5px solid var(--color-ink-300);
+}
+
+.react-grid-item.react-draggable-dragging {
+  box-shadow: var(--shadow-lifted);
+  z-index: 10;
+}
