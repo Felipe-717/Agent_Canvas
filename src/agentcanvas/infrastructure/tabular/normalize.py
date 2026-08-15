@@ -21,9 +21,15 @@ from agentcanvas.domain.dataset.schema import (
     normalize_column_name,
 )
 
-_DATE_LIKE = re.compile(
-    r"^\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})([ T]\d{1,2}:\d{2}.*)?\s*$"
-)
+_TIME_PART = r"([ T]\d{1,2}:\d{2}.*)?"
+_ISO_DATE = re.compile(rf"^\s*\d{{4}}[-/]\d{{1,2}}[-/]\d{{1,2}}{_TIME_PART}\s*$")
+"""Ano primero. Con estas no se puede aplicar `dayfirst`: "2026-03-05" es el 5
+de marzo, y leerla al reves la convierte en el 3 de mayo sin avisar de nada."""
+
+_LOCAL_DATE = re.compile(rf"^\s*\d{{1,2}}[-/]\d{{1,2}}[-/]\d{{2,4}}{_TIME_PART}\s*$")
+"""Dia primero, que es como se escriben las fechas en espanol."""
+
+_DATE_LIKE = re.compile(rf"({_ISO_DATE.pattern})|({_LOCAL_DATE.pattern})")
 
 # Proporcion de la muestra que debe parsear como fecha para convertir la columna.
 _DATE_THRESHOLD = 0.9
@@ -42,6 +48,22 @@ def finalize(frame: pd.DataFrame) -> pd.DataFrame:
     return _coerce_dates(_coerce_numbers(renamed))
 
 
+def _is_text(series: pd.Series[Any]) -> bool:
+    """True si la columna trae texto sin interpretar.
+
+    No basta con `is_object_dtype`: hasta pandas 2 una columna de texto llegaba
+    como `object`, y desde pandas 3 llega como `str`. Mirando solo `object`, en
+    pandas 3 no se convertia ni un numero ni una fecha, el schema salia entero
+    de tipo texto y cualquier suma se rechazaba como invalida. Se comprueban los
+    dos, que es cierto en las dos versiones.
+    """
+    if isinstance(series.dtype, pd.CategoricalDtype):
+        # `is_string_dtype` dice que si a una categorica de textos, y convertirla
+        # aqui destruiria justamente lo que la hace categorica.
+        return False
+    return bool(pdt.is_object_dtype(series) or pdt.is_string_dtype(series))
+
+
 def _coerce_numbers(frame: pd.DataFrame) -> pd.DataFrame:
     """Convierte a numero las columnas de texto que lo son.
 
@@ -51,7 +73,7 @@ def _coerce_numbers(frame: pd.DataFrame) -> pd.DataFrame:
     """
     for column in frame.columns:
         series = frame[column]
-        if not pdt.is_object_dtype(series):
+        if not _is_text(series):
             continue
         present = series.dropna()
         if present.empty:
@@ -105,15 +127,21 @@ def _coerce_dates(frame: pd.DataFrame) -> pd.DataFrame:
     """
     for column in frame.columns:
         series = frame[column]
-        if not pdt.is_object_dtype(series):
+        if not _is_text(series):
             continue
         sample = series.dropna().head(_SAMPLE_SIZE)
         if sample.empty:
             continue
-        looks_like_date = sample.astype(str).str.match(_DATE_LIKE).mean()
-        if looks_like_date < _DATE_THRESHOLD:
+        texto = sample.astype(str)
+        if texto.str.match(_DATE_LIKE).mean() < _DATE_THRESHOLD:
             continue
-        converted = pd.to_datetime(series, errors="coerce", format="mixed", dayfirst=True)
+        # `dayfirst` solo donde tiene sentido. Aplicarlo a una columna ISO
+        # intercambia dia y mes en silencio: "2026-03-05" se guardaba como el 3
+        # de mayo, y a partir de ahi todo lo demas cuadraba y era falso.
+        if texto.str.match(_ISO_DATE).mean() >= _DATE_THRESHOLD:
+            converted = pd.to_datetime(series, errors="coerce", format="ISO8601")
+        else:
+            converted = pd.to_datetime(series, errors="coerce", format="mixed", dayfirst=True)
         # Si la conversion perdio datos que no eran nulos, se descarta.
         if converted.notna().sum() >= series.notna().sum() * _DATE_THRESHOLD:
             frame[column] = converted

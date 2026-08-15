@@ -364,3 +364,40 @@ def test_a_repeated_group_is_detected_despite_small_variations(
     # Y explica donde vive la identidad de cada bloque, que es lo que el modelo
     # no adivinaba: buscaba "CAMA 2" como si fuera un valor de los datos.
     assert "fila de encima" in aviso
+
+
+def test_an_iso_date_keeps_its_day_and_month(
+    reader: OpenpyxlWorkbookReader, tmp_path: Path
+) -> None:
+    """El 5 de marzo no puede convertirse en el 3 de mayo.
+
+    Las fechas de fuera se leen con `dayfirst`, que es como se escriben en
+    espanol, pero aplicarlo tambien a las ISO intercambiaba dia y mes sin decir
+    nada: la columna seguia siendo de fechas, los graficos seguian saliendo y
+    todo cuadraba salvo que estaba mal. Este es el peor tipo de fallo que puede
+    tener el sistema, asi que se fija con un test.
+    """
+    source = tmp_path / "iso.csv"
+    source.write_text("fecha,valor\n2026-03-05,10\n2026-07-11,20\n", encoding="utf-8")
+
+    table = reader.extract(
+        source, TableSpec(sheet=CSV_SHEET, header_row=1), destination=tmp_path / "o.parquet"
+    )
+
+    assert table.schema_.get("fecha") is not None
+    assert [str(row["fecha"])[:10] for row in table.preview] == ["2026-03-05", "2026-07-11"]
+
+
+def test_a_day_first_date_is_still_read_day_first(
+    reader: OpenpyxlWorkbookReader, tmp_path: Path
+) -> None:
+    # Y lo de arriba no puede haberse llevado por delante el caso corriente:
+    # "05/03/2026" escrito por alguien de aqui es el 5 de marzo.
+    source = tmp_path / "local.csv"
+    source.write_text("fecha,valor\n05/03/2026,10\n11/07/2026,20\n", encoding="utf-8")
+
+    table = reader.extract(
+        source, TableSpec(sheet=CSV_SHEET, header_row=1), destination=tmp_path / "o.parquet"
+    )
+
+    assert [str(row["fecha"])[:10] for row in table.preview] == ["2026-03-05", "2026-07-11"]
