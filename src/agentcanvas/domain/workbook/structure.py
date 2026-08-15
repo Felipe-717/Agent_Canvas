@@ -11,6 +11,9 @@ a preguntarle nada a nadie.
 
 from __future__ import annotations
 
+import re
+from collections import Counter
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CSV_SHEET = "datos"
@@ -145,3 +148,46 @@ class CellWindow(BaseModel):
             cells = [cell[:max_width] if cell else "·" for cell in row]
             lines.append(f"{number:>4} | " + " | ".join(cells))
         return "\n".join(lines)
+
+
+def parallel_tables_hint(rows: tuple[tuple[str, ...], ...]) -> str | None:
+    """Avisa si alguna fila parece la cabecera de varias tablas en paralelo.
+
+    Es una pista, no una decision: se da al listar las hojas para que el agente
+    no empiece con el pie cambiado, pero sigue eligiendo el las coordenadas.
+    """
+    for row in rows:
+        celdas = [cell.strip().lower() for cell in row if cell.strip()]
+        if len(celdas) < 4:
+            continue
+        repetido = repeated_group(celdas)
+        if repetido is not None:
+            grupo, veces = repetido
+            return (
+                f"ojo: parece contener {veces} tablas en paralelo "
+                f"(se repite {', '.join(grupo)})"
+            )
+    return None
+
+
+def repeated_group(names: list[str]) -> tuple[tuple[str, ...], int] | None:
+    """Nombres de columna que se repiten, si delatan tablas puestas en paralelo.
+
+    No se busca periodicidad exacta. Las cabeceras reales tienen variaciones -en
+    una hoja con nueve camas de germinacion, una ponia `chapola` donde las demas
+    ponen `semilla`- y exigir un patron perfecto hacia que no saltara el aviso
+    justo en el caso que mas importaba.
+    """
+    bases = [re.sub(r"_\d+$", "", name) for name in names]
+    counts = Counter(bases)
+    repeated = {name: n for name, n in counts.items() if n > 1}
+    if not repeated:
+        return None
+
+    veces = max(repeated.values())
+    # Dos columnas con el mismo nombre son una cabecera duplicada. Que se repita
+    # un grupo entero, o que una sola se repita tres veces, ya es otra cosa.
+    if veces < 3 and len(repeated) < 2:
+        return None
+    grupo = tuple(dict.fromkeys(name for name in bases if name in repeated))
+    return grupo, veces

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { Artifact, CanvasSummary, Message } from "../api/types";
+import type { Artifact, CanvasSummary, Cell, Message } from "../api/types";
+import { formatCell } from "../charts/options";
 import { HowItWorks } from "./HowItWorks";
 import { PaperclipIcon, PinIcon, TableIcon } from "./Icons";
 import { Markdown } from "./Markdown";
@@ -94,16 +95,71 @@ function DatasetCard({ artifact }: { artifact: Artifact }) {
       {/* De dónde salió: en un Excel caótico, saber que se leyó la hoja
           correcta importa tanto como el resultado. */}
       {artifact.origin && <p className="mt-1 text-xs text-ink-400">{artifact.origin}</p>}
-      <div className="mt-2 flex flex-wrap gap-1">
-        {(artifact.columns ?? []).map((column) => (
-          <span
-            key={column}
-            className="rounded border border-bone-300 px-1.5 py-0.5 font-mono text-[10px] text-ink-500"
-          >
-            {column}
-          </span>
-        ))}
-      </div>
+
+      {/* Lo que olió raro. Antes solo lo veía el modelo, y una extracción
+          sospechosa pasaba inadvertida hasta que un gráfico salía mal. */}
+      {artifact.warnings.length > 0 && (
+        <ul className="mt-2 space-y-1 rounded border border-notice/30 bg-notice/5 px-2.5 py-1.5">
+          {artifact.warnings.map((warning) => (
+            <li key={warning} className="text-xs text-ink-700">
+              {warning}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Las primeras filas: es lo que permite decir "esa no es la tabla que
+          quería" antes de construir nada encima. */}
+      {artifact.preview.length > 0 && <Peek rows={artifact.preview} />}
+
+      {artifact.preview.length === 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {(artifact.columns ?? []).map((column) => (
+            <span
+              key={column}
+              className="rounded border border-bone-300 px-1.5 py-0.5 font-mono text-[10px] text-ink-500"
+            >
+              {column}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Peek({ rows }: { rows: Record<string, Cell>[] }) {
+  const columns = Object.keys(rows[0] ?? {});
+  return (
+    <div className="mt-2 overflow-x-auto rounded border border-bone-200">
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr className="bg-bone-100">
+            {columns.map((column) => (
+              <th
+                key={column}
+                className="border-b border-bone-200 px-2 py-1 text-left font-mono text-[10px] font-medium whitespace-nowrap text-ink-500"
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={index}>
+              {columns.map((column) => (
+                <td
+                  key={column}
+                  className="border-b border-bone-100 px-2 py-1 whitespace-nowrap text-ink-700 last:border-0"
+                >
+                  {formatCell(row[column])}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

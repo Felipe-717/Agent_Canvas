@@ -433,3 +433,98 @@ def test_the_prompt_forbids_answering_figures_from_memory() -> None:
 
     assert "NUNCA des una cifra" in SYSTEM_PROMPT
     assert "consultar_datos" in SYSTEM_PROMPT
+
+
+# ------------------------------------------------- ver lo que se extrajo
+
+
+async def test_the_dataset_card_shows_the_first_rows(
+    client: AsyncClient, llm: FakeLLM, excel: bytes
+) -> None:
+    # Sin esto el usuario ve nombre, recuento y procedencia, pero no los datos,
+    # y una extraccion equivocada no se nota hasta dos preguntas despues.
+    conversation, _ = await _with_dataset(client, llm, excel)
+
+    history = (await client.get(f"/api/conversations/{conversation}/messages")).json()
+    tarjeta = history[-1]["artifacts"][0]
+
+    assert tarjeta["kind"] == "dataset"
+    assert tarjeta["preview"][0]["region"] == "Norte"
+    assert len(tarjeta["preview"]) <= 3
+
+
+async def test_the_preview_reflects_the_data_of_today(
+    client: AsyncClient, llm: FakeLLM, excel: bytes, container: Container
+) -> None:
+    conversation, dataset_id = await _with_dataset(client, llm, excel)
+
+    # Llega el archivo del mes siguiente por el camino de actualizar.
+    nuevo = _excel_bytes([("Sur", 999)])
+    await client.post(
+        f"/api/datasets/{dataset_id}/refresh",
+        files={"file": ("nuevo.xlsx", nuevo, "application/vnd.ms-excel")},
+    )
+
+    history = (await client.get(f"/api/conversations/{conversation}/messages")).json()
+    tarjeta = next(
+        a for m in history for a in m["artifacts"] if a["kind"] == "dataset"
+    )
+
+    # La vista previa se recalcula, igual que los graficos.
+    assert tarjeta["preview"][0]["region"] == "Sur"
+
+
+async def test_extraction_warnings_reach_the_user_too(
+    client: AsyncClient, llm: FakeLLM, tmp_path: Path
+) -> None:
+    parallel = _excel_parallel(tmp_path)
+    conversation = await _open(client)
+    llm.queue(text_response("Recibido."))
+    turn = await _send(client, conversation, "toma", upload=parallel)
+    file_id = turn["user_message"]["attachments"][0]["file_id"]
+
+    llm.queue(
+        tool_response(
+            "preparar_datos", {"archivo": file_id, "hoja": "Camas", "fila_cabecera": 1}
+        ),
+        text_response("Preparado."),
+    )
+    turn = await _send(client, conversation, "prepáralo")
+
+    avisos = turn["assistant_message"]["artifacts"][0]["warnings"]
+    # Antes esto solo lo veia el modelo.
+    assert any("repite" in aviso for aviso in avisos)
+
+
+def _excel_bytes(rows: list[tuple[str, int]]) -> bytes:
+    import io
+
+    book = openpyxl.Workbook()
+    sheet = book.active
+    assert sheet is not None
+    sheet.title = "Ventas"
+    sheet["A1"] = "Informe confidencial"
+    for column, name in enumerate(["region", "valor"], start=1):
+        sheet.cell(row=3, column=column, value=name)
+    for offset, (region, valor) in enumerate(rows):
+        sheet.cell(row=4 + offset, column=1, value=region)
+        sheet.cell(row=4 + offset, column=2, value=valor)
+    buffer = io.BytesIO()
+    book.save(buffer)
+    return buffer.getvalue()
+
+
+def _excel_parallel(tmp_path: Path) -> bytes:
+    book = openpyxl.Workbook()
+    sheet = book.active
+    assert sheet is not None
+    sheet.title = "Camas"
+    for column, name in enumerate(
+        ["fecha", "semilla", "cantidad", "fecha", "semilla", "cantidad"], start=1
+    ):
+        sheet.cell(row=1, column=column, value=name)
+    for column in range(1, 7):
+        sheet.cell(row=2, column=column, value=column)
+    path = tmp_path / "paralelo.xlsx"
+    book.save(path)
+    return path.read_bytes()

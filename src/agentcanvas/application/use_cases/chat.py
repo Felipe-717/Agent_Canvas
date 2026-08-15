@@ -48,13 +48,21 @@ from agentcanvas.domain.shared.identifiers import new_id
 from agentcanvas.domain.visual.result import VisualData
 from agentcanvas.domain.visual.spec import VisualSpec
 from agentcanvas.domain.visual.validation import validate_spec
-from agentcanvas.domain.workbook.structure import TableSpec
+from agentcanvas.domain.workbook.structure import TableSpec, parallel_tables_hint
 
 PEEK_CELL_WIDTH = 20
 PREVIEW_ROWS = 4
 PREVIEW_COLUMNS = 8
 PREVIEW_CELL_WIDTH = 16
 MAX_SHEETS_PREVIEWED = 8
+HINT_ROWS = 12
+HINT_COLUMNS = 24
+"""Ventana que se inspecciona -sin ensenarla- para detectar tablas en
+paralelo: con las ocho columnas del resumen no se ven."""
+
+PREVIEW_DATA_ROWS = 3
+"""Filas de muestra en la tarjeta de datos. Tres bastan para reconocer si la
+extraccion es la buena, y no roban sitio a la conversacion."""
 MAX_QUERY_ROWS = 30
 """Filas que se le devuelven al modelo en una consulta. Suficiente para
 responder una pregunta; mas seria pagar por contexto que no va a usar."""
@@ -77,7 +85,14 @@ class RenderedMessage(BaseModel):
 
     message: ChatMessage
     data: dict[str, VisualData] = {}
-    """Datos de cada visual, indexados por el id del dataset y la posicion."""
+    """Datos de cada visual, indexados por su posicion en el mensaje."""
+
+    previews: dict[str, tuple[dict[str, object], ...]] = {}
+    """Primeras filas de cada conjunto preparado, recalculadas al abrir.
+
+    Sin ellas el usuario ve el nombre, el recuento y la procedencia, pero no
+    los datos, y una extraccion equivocada no se nota hasta que un grafico sale
+    mal dos preguntas despues."""
 
     errors: dict[str, str] = {}
 
@@ -264,18 +279,37 @@ class ChatService:
 
     async def _render(self, message: ChatMessage) -> RenderedMessage:
         data: dict[str, VisualData] = {}
+        previews: dict[str, tuple[dict[str, object], ...]] = {}
         errors: dict[str, str] = {}
         for index, artifact in enumerate(message.artifacts):
-            if not isinstance(artifact, VisualArtifact):
-                continue
             key = str(index)
             try:
-                data[key] = await self._execute(artifact.dataset_id, artifact.spec)
+                if isinstance(artifact, VisualArtifact):
+                    data[key] = await self._execute(artifact.dataset_id, artifact.spec)
+                elif isinstance(artifact, DatasetArtifact):
+                    previews[key] = await self._preview(artifact.dataset_id)
             except Exception as error:
-                # Un grafico que ya no se puede calcular no puede impedir leer
-                # la conversacion.
+                # Nada de esto puede impedir leer la conversacion.
                 errors[key] = str(error)
-        return RenderedMessage(message=message, data=data, errors=errors)
+        return RenderedMessage(
+            message=message, data=data, previews=previews, errors=errors
+        )
+
+    async def _preview(self, dataset_id: str) -> tuple[dict[str, object], ...]:
+        """Las primeras filas tal como estan hoy, no como estaban al crearlas.
+
+        Se recalculan igual que los graficos: si el conjunto se actualizo con
+        el archivo del mes siguiente, la tarjeta lo refleja.
+        """
+        dataset = await self._datasets.get(dataset_id)
+        if dataset is None or dataset.current_version_id is None:
+            return ()
+        version = await self._datasets.get_version(dataset.current_version_id)
+        if version is None:
+            return ()
+        return self._engine.sample(
+            self._storage.path_for(version.storage_key), rows=PREVIEW_DATA_ROWS
+        )
 
     async def _execute(self, dataset_id: str, spec: VisualSpec) -> VisualData:
         dataset = await self._datasets.get(dataset_id)
@@ -305,9 +339,17 @@ class ChatService:
                 window = self._workbook.peek(
                     path, sheet=sheet.name, rows=PREVIEW_ROWS, columns=PREVIEW_COLUMNS
                 )
+                # Se inspecciona una ventana mas ancha de la que se ensena: con
+                # ocho columnas no se ve que hay tablas puestas en paralelo.
+                wide = self._workbook.peek(
+                    path, sheet=sheet.name, rows=HINT_ROWS, columns=HINT_COLUMNS
+                )
+                hint = parallel_tables_hint(wide.rows)
                 blocks.append(
                     f"- '{sheet.name}': {sheet.rows} filas x {sheet.columns} columnas, "
-                    f"{sheet.filled_cells} celdas\n{window.render(PREVIEW_CELL_WIDTH)}"
+                    f"{sheet.filled_cells} celdas"
+                    + (f" — {hint}" if hint else "")
+                    + f"\n{window.render(PREVIEW_CELL_WIDTH)}"
                 )
             empties = [s.name for s in overview.sheets if s.filled_cells == 0]
             if empties:
@@ -382,6 +424,7 @@ class ChatService:
                     row_count=table.row_count,
                     columns=table.schema_.column_names,
                     origin=spec.describe(),
+                    warnings=table.warnings,
                 )
             )
             return ToolOutcome(

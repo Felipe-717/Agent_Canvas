@@ -52,6 +52,13 @@ class DatasetArtifact(BaseModel):
     origin: str
     """De donde salio, en palabras: "hoja Contactos, cabecera en la fila 11"."""
 
+    warnings: tuple[str, ...] = ()
+    """Lo que olia raro al extraerla.
+
+    Se guardan para ensenarselos tambien al usuario. Antes solo los veia el
+    modelo, y una extraccion sospechosa podia pasar inadvertida hasta que un
+    grafico salia mal dos preguntas despues."""
+
 
 class VisualArtifact(BaseModel):
     model_config = ConfigDict(frozen=True)

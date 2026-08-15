@@ -65,6 +65,12 @@ class ArtifactOut(BaseModel):
     row_count: int | None = None
     columns: list[str] | None = None
     origin: str | None = None
+    warnings: list[str] = []
+    """Lo que olio raro al extraer. Se ensena al usuario, no solo al modelo."""
+
+    preview: list[dict[str, Any]] = []
+    """Primeras filas, recalculadas al abrir. Sin ellas una extraccion
+    equivocada no se nota hasta que un grafico sale mal."""
     spec: VisualSpec | None = None
     data: VisualData | None = None
     code: str | None = None
@@ -94,7 +100,12 @@ class MessageOut(BaseModel):
                 for a in message.attachments
             ],
             artifacts=[
-                _artifact(artifact, rendered.data.get(str(index)), rendered.errors.get(str(index)))
+                _artifact(
+                    artifact,
+                    rendered.data.get(str(index)),
+                    rendered.previews.get(str(index), ()),
+                    rendered.errors.get(str(index)),
+                )
                 for index, artifact in enumerate(message.artifacts)
             ],
             created_at=message.created_at,
@@ -264,7 +275,12 @@ async def _read_upload(file: UploadFile | None) -> tuple[str, bytes] | None:
     return (file.filename, content)
 
 
-def _artifact(artifact: Any, data: VisualData | None, error: str | None) -> ArtifactOut:
+def _artifact(
+    artifact: Any,
+    data: VisualData | None,
+    preview: tuple[dict[str, object], ...],
+    error: str | None,
+) -> ArtifactOut:
     if isinstance(artifact, DatasetArtifact):
         return ArtifactOut(
             kind="dataset",
@@ -273,6 +289,9 @@ def _artifact(artifact: Any, data: VisualData | None, error: str | None) -> Arti
             row_count=artifact.row_count,
             columns=list(artifact.columns),
             origin=artifact.origin,
+            warnings=list(artifact.warnings),
+            preview=[dict(row) for row in preview],
+            error=error,
         )
     if isinstance(artifact, VisualArtifact):
         return ArtifactOut(

@@ -19,3 +19,11 @@ class QueryEnginePort(Protocol):
 
     def execute(self, spec: VisualSpec, *, source: Path, schema: DatasetSchema) -> VisualData: ...
 
+    def sample(self, source: Path, *, rows: int = 3) -> tuple[dict[str, object], ...]:
+        """Las primeras filas, sin agregar nada.
+
+        Es lo que se le ensena al usuario para que reconozca de un vistazo si la
+        tabla extraida es la que queria.
+        """
+        ...
+

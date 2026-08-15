@@ -8,8 +8,6 @@ cuando la cabecera esta en la fila 11 y hay tres tablas en la misma hoja.
 from __future__ import annotations
 
 import csv
-import re
-from collections import Counter
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -25,6 +23,7 @@ from agentcanvas.domain.workbook.structure import (
     SheetOverview,
     TableSpec,
     WorkbookOverview,
+    repeated_group,
 )
 from agentcanvas.infrastructure.tabular.normalize import (
     finalize,
@@ -326,7 +325,7 @@ def _warnings(frame: pd.DataFrame) -> tuple[str, ...]:
     """Lo que huele raro en una extraccion que no ha fallado."""
     avisos: list[str] = []
 
-    repetido = _repeated_group([str(column) for column in frame.columns])
+    repetido = repeated_group([str(column) for column in frame.columns])
     if repetido is not None:
         grupo, veces = repetido
         avisos.append(
@@ -348,26 +347,3 @@ def _warnings(frame: pd.DataFrame) -> tuple[str, ...]:
                 f"vuelve a preparar acotando `ultima_fila_datos`."
             )
     return tuple(avisos)
-
-
-def _repeated_group(names: list[str]) -> tuple[tuple[str, ...], int] | None:
-    """Nombres de columna que se repiten, si delatan tablas puestas en paralelo.
-
-    No se busca periodicidad exacta. Las cabeceras reales tienen variaciones -en
-    una hoja con nueve camas de germinacion, una ponia `chapola` donde las demas
-    ponen `semilla`- y exigir un patron perfecto hacia que no saltara el aviso
-    justo en el caso que mas importaba.
-    """
-    bases = [re.sub(r"_\d+$", "", name) for name in names]
-    counts = Counter(bases)
-    repeated = {name: n for name, n in counts.items() if n > 1}
-    if not repeated:
-        return None
-
-    veces = max(repeated.values())
-    # Dos columnas con el mismo nombre son una cabecera duplicada. Que se repita
-    # un grupo entero, o que una sola se repita tres veces, ya es otra cosa.
-    if veces < 3 and len(repeated) < 2:
-        return None
-    grupo = tuple(dict.fromkeys(name for name in bases if name in repeated))
-    return grupo, veces

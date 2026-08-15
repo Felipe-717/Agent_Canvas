@@ -182,6 +182,10 @@ export interface Artifact {
   row_count: number | null;
   columns: string[] | null;
   origin: string | null;
+  /** Lo que olió raro al extraer: totales colados, tablas en paralelo… */
+  warnings: string[];
+  /** Primeras filas, recalculadas al abrir la conversación. */
+  preview: Record<string, Cell>[];
   spec: VisualSpec | null;
   data: VisualData | null;
   /** El cálculo exacto en Python, generado de la especificación. */

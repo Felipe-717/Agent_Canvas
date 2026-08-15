@@ -60,6 +60,10 @@ _GRAIN_FREQUENCIES: dict[TimeGrain, str] = {
 class PandasQueryEngine:
     """Implementa `QueryEnginePort`."""
 
+    def sample(self, source: Path, *, rows: int = 3) -> tuple[dict[str, object], ...]:
+        frame = pd.read_parquet(source).head(rows)
+        return _to_rows(frame, tuple(str(column) for column in frame.columns))
+
     def execute(self, spec: VisualSpec, *, source: Path, schema: DatasetSchema) -> VisualData:
         # Normalizar antes de nada: una spec que nombre las columnas como venian
         # en el archivo pasa la validacion pero reventaria al leer el Parquet.
