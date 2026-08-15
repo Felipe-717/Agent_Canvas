@@ -34,6 +34,13 @@ from agentcanvas.domain.shared.errors import DomainError
 Validator = Callable[[Any], tuple[str, ...]]
 """Comprueba el objeto ya tipado contra el dominio. Vacio = correcto."""
 
+Observer = Callable[[AgentStep], None]
+"""Se le notifica cada paso segun ocurre.
+
+Existe para poder retransmitir el progreso al usuario mientras el agente
+trabaja. Es sincrono y no devuelve nada a proposito: un observador no puede
+influir en la ejecucion, solo mirarla."""
+
 _NO_JSON = "No has devuelto un objeto JSON. Responde solo con el JSON, sin texto alrededor."
 
 _REPAIR_PROMPT = """\
@@ -76,9 +83,16 @@ class StructuredGenerator:
         system: str,
         user: str,
         validate: Validator | None = None,
+        observer: Observer | None = None,
     ) -> StructuredResult[T]:
         tracker = BudgetTracker(self._budget)
         trace = AgentTrace()
+
+        def record(step: AgentStep) -> AgentTrace:
+            if observer is not None:
+                observer(step)
+            return trace.with_step(step)
+
         messages: list[Message] = [Message.system(system), Message.user(user)]
         response_format = ResponseFormat(name=name, schema_=output.model_json_schema())
         problems: tuple[str, ...] = ()
@@ -92,7 +106,7 @@ class StructuredGenerator:
             response = await self._llm.complete(
                 LLMRequest(messages=tuple(messages), response_format=response_format)
             )
-            trace = trace.with_step(
+            trace = record(
                 AgentStep(
                     iteration=iteration,
                     kind=StepKind.PROPOSAL,
@@ -111,16 +125,16 @@ class StructuredGenerator:
             if value is not None:
                 return StructuredResult[T](
                     value=value,
-                    trace=trace.with_step(AgentStep(iteration=iteration, kind=StepKind.ACCEPTED)),
+                    trace=record(AgentStep(iteration=iteration, kind=StepKind.ACCEPTED)),
                 )
 
-            trace = trace.with_step(
+            trace = record(
                 AgentStep(iteration=iteration, kind=StepKind.REJECTED, problems=problems)
             )
             if not tracker.has_iterations_left:
                 raise AgentFailedError(
                     problems,
-                    trace.with_step(
+                    record(
                         AgentStep(iteration=iteration, kind=StepKind.FAILED, problems=problems)
                     ),
                 )

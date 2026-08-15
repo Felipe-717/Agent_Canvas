@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 
-from agentcanvas.agent.structured import StructuredGenerator, StructuredResult
+from agentcanvas.agent.structured import Observer, StructuredGenerator, StructuredResult
 from agentcanvas.domain.dataset.schema import DatasetSchema
 from agentcanvas.domain.visual.spec import VisualSpec
 from agentcanvas.domain.visual.validation import validate_spec
@@ -76,6 +76,7 @@ class VisualSpecAgent:
         dataset_name: str,
         schema: DatasetSchema,
         sample: tuple[dict[str, object], ...] = (),
+        observer: Observer | None = None,
     ) -> StructuredResult[VisualSpec]:
         return await self._generator.generate(
             output=VisualSpec,
@@ -88,6 +89,7 @@ class VisualSpecAgent:
                 instruction=instruction.strip(),
             ),
             validate=lambda spec: validate_spec(spec, schema),
+            observer=observer,
         )
 
 

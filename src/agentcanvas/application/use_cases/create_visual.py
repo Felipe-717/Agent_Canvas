@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
+from agentcanvas.agent.structured import Observer
 from agentcanvas.agent.trace import AgentTrace
 from agentcanvas.agent.visual_agent import VisualSpecAgent
 from agentcanvas.application.ports.query import DatasetSamplerPort, QueryEnginePort
@@ -55,7 +56,9 @@ class CreateVisualUseCase:
         self._sampler = sampler
         self._agent = agent
 
-    async def execute(self, command: CreateVisualCommand) -> CreateVisualResult:
+    async def execute(
+        self, command: CreateVisualCommand, *, observer: Observer | None = None
+    ) -> CreateVisualResult:
         dataset = await self._datasets.get(command.dataset_id)
         if dataset is None or dataset.owner_id != command.owner_id:
             raise NotFoundError("dataset", command.dataset_id)
@@ -71,6 +74,7 @@ class CreateVisualUseCase:
             dataset_name=dataset.name,
             schema=dataset.schema_,
             sample=self._sampler.sample(source, rows=SAMPLE_ROWS),
+            observer=observer,
         )
 
         # La spec ya paso la validacion dentro del agente; ejecutarla aqui no
