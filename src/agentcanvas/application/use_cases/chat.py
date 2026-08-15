@@ -427,6 +427,7 @@ class ChatService:
                         "required": ["archivo"],
                     },
                     handler=listar_hojas,
+                    activity="Abriendo el archivo",
                 ),
                 tool(
                     name="mirar",
@@ -444,6 +445,7 @@ class ChatService:
                         "required": ["archivo", "hoja"],
                     },
                     handler=mirar,
+                    activity="Mirando la hoja {hoja}",
                 ),
                 tool(
                     name="preparar_datos",
@@ -470,6 +472,7 @@ class ChatService:
                         "required": ["archivo", "hoja", "fila_cabecera"],
                     },
                     handler=preparar_datos,
+                    activity="Preparando los datos de {hoja}",
                 ),
                 tool(
                     name="crear_visual",
@@ -483,6 +486,7 @@ class ChatService:
                         "required": ["dataset_id", "especificacion"],
                     },
                     handler=crear_visual,
+                    activity="Dibujando el gráfico",
                 ),
             ]
         )

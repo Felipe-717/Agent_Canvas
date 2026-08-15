@@ -21,6 +21,7 @@ export default function App() {
   const [canvas, setCanvas] = useState<DashboardDetail | null>(null);
   const [view, setView] = useState<View>({ kind: "chat" });
   const [busy, setBusy] = useState(false);
+  const [activity, setActivity] = useState<string | null>(null);
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [offline, setOffline] = useState(false);
 
@@ -64,6 +65,7 @@ export default function App() {
     async (text: string, file: File | null) => {
       if (!active) return;
       setBusy(true);
+      setActivity(null);
       setFailure(null);
       // El mensaje propio aparece al instante; esperar al servidor para verlo
       // haría que escribir se sintiera lento.
@@ -77,7 +79,7 @@ export default function App() {
       };
       setMessages((current) => [...current, pending]);
       try {
-        const turn = await api.send(active, text, file);
+        const turn = await api.send(active, text, file, setActivity);
         setMessages((current) => [
           ...current.filter((message) => message.id !== pending.id),
           turn.user_message,
@@ -89,6 +91,7 @@ export default function App() {
         setFailure(error as ApiFailure);
       } finally {
         setBusy(false);
+        setActivity(null);
       }
     },
     [active],
@@ -169,6 +172,7 @@ export default function App() {
             <Chat
               messages={messages}
               busy={busy}
+              activity={activity}
               failure={failure}
               canvases={canvases}
               onSend={send}

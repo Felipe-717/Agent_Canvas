@@ -123,6 +123,15 @@ class AgentLoop:
 
             history.append(Message.assistant(response.content, response.tool_calls))
             for call in response.tool_calls:
+                # Se anuncia antes de ejecutar: leer un Excel grande tarda, y
+                # el aviso llega tarde si se manda cuando ya termino.
+                trace = record(
+                    AgentStep(
+                        iteration=iteration,
+                        kind=StepKind.TOOL,
+                        content=toolbox.describe(call.name, call.arguments),
+                    )
+                )
                 outcome = await toolbox.run(call.name, call.arguments)
                 history.append(Message.tool_result(call.id, outcome.message))
                 if outcome.done:

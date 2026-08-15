@@ -55,6 +55,36 @@ async function toFailure(response: Response): Promise<ApiFailure> {
   return new ApiFailure(response.status, "Error", `El servidor respondió ${response.status}`);
 }
 
+/** Trocea un flujo SSE en pares (evento, datos).
+ *
+ * Los eventos llegan partidos por la red, así que se acumula hasta ver la
+ * línea en blanco que cierra cada bloque. */
+async function* readEvents(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<[string, Record<string, unknown>]> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let separator = buffer.indexOf("\n\n");
+    while (separator !== -1) {
+      const block = buffer.slice(0, separator);
+      buffer = buffer.slice(separator + 2);
+      const name = /^event: (.+)$/m.exec(block)?.[1];
+      const data = /^data: (.+)$/m.exec(block)?.[1];
+      if (name && data) {
+        yield [name, JSON.parse(data) as Record<string, unknown>];
+      }
+      separator = buffer.indexOf("\n\n");
+    }
+  }
+}
+
 function json(body: unknown): RequestInit {
   return {
     method: "POST",
@@ -75,15 +105,46 @@ export const api = {
   deleteConversation: (id: string) =>
     request<void>(`/api/conversations/${id}`, { method: "DELETE" }),
 
-  /** El texto y el adjunto viajan juntos: así funciona un chat. */
-  send(conversationId: string, text: string, file: File | null) {
+  /** El texto y el adjunto viajan juntos: así funciona un chat.
+   *
+   * `onActivity` recibe lo que el agente va haciendo. Explorar un libro de once
+   * hojas lleva sus segundos, y "Mirando la hoja INVENTARIO" es la diferencia
+   * entre esperar y dudar de si se ha colgado. */
+  async send(
+    conversationId: string,
+    text: string,
+    file: File | null,
+    onActivity?: (activity: string) => void,
+  ): Promise<Turn> {
     const form = new FormData();
     form.append("text", text);
     if (file) form.append("file", file);
-    return request<Turn>(`/api/conversations/${conversationId}/messages`, {
+
+    const response = await fetch(`/api/conversations/${conversationId}/messages/stream`, {
       method: "POST",
       body: form,
     });
+    if (!response.ok || !response.body) {
+      throw await toFailure(response);
+    }
+
+    let turn: Turn | null = null;
+    let failure: ApiFailure | null = null;
+    for await (const [name, payload] of readEvents(response.body)) {
+      if (name === "activity") onActivity?.(String(payload.text));
+      else if (name === "turn") turn = payload as unknown as Turn;
+      else if (name === "error") {
+        failure = new ApiFailure(
+          500,
+          String(payload.error ?? "Error"),
+          String(payload.detail ?? "Fallo del asistente"),
+          (payload.problems as string[]) ?? [],
+        );
+      }
+    }
+    if (failure) throw failure;
+    if (!turn) throw new ApiFailure(500, "Error", "El servidor no devolvió la respuesta");
+    return turn;
   },
 
   /* --- lienzos --- */

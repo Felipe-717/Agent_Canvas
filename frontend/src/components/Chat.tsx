@@ -13,6 +13,7 @@ const OPENING = [
 export function Chat({
   messages,
   busy,
+  activity,
   failure,
   canvases,
   onSend,
@@ -20,6 +21,7 @@ export function Chat({
 }: {
   messages: Message[];
   busy: boolean;
+  activity: string | null;
   failure: ApiFailure | null;
   canvases: CanvasSummary[];
   onSend: (text: string, file: File | null) => Promise<void>;
@@ -29,7 +31,7 @@ export function Chat({
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, busy]);
+  }, [messages.length, busy, activity]);
 
   return (
     <div className="flex h-full flex-col">
@@ -43,7 +45,7 @@ export function Chat({
             <Bubble key={message.id} message={message} canvases={canvases} onPin={onPin} />
           ))}
 
-          {busy && <Thinking />}
+          {busy && <Thinking activity={activity} />}
 
           {failure && (
             <div className="rounded-card border border-alert/30 bg-alert/5 px-3 py-2">
@@ -93,9 +95,9 @@ function Welcome({ onPick }: { onPick: (text: string) => void }) {
  *
  * El agente puede tardar varios segundos explorando un archivo; sin señal de
  * vida, la espera se lee como que algo se ha roto. */
-function Thinking() {
+function Thinking({ activity }: { activity: string | null }) {
   return (
-    <div className="flex items-center gap-1.5 px-1">
+    <div className="flex items-center gap-2 px-1">
       {[0, 1, 2].map((index) => (
         <span
           key={index}
@@ -106,6 +108,8 @@ function Thinking() {
           }}
         />
       ))}
+      {/* Lo que esta haciendo ahora mismo, no un mensaje generico. */}
+      {activity && <span className="text-xs text-ink-400">{activity}</span>}
     </div>
   );
 }

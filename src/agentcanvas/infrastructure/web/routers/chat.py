@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import asyncio
+import json
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from agentcanvas.agent.trace import AgentStep, StepKind
 from agentcanvas.application.use_cases.chat import RenderedMessage
 from agentcanvas.domain.chat.entities import (
     ChatMessage,
@@ -13,9 +18,11 @@ from agentcanvas.domain.chat.entities import (
     DatasetArtifact,
     VisualArtifact,
 )
+from agentcanvas.domain.shared.errors import DomainError
 from agentcanvas.domain.visual.result import VisualData
 from agentcanvas.domain.visual.spec import VisualSpec
 from agentcanvas.infrastructure.web.dependencies import ContainerDep, OwnerDep, SessionDep
+from agentcanvas.infrastructure.web.errors import as_payload
 from agentcanvas.infrastructure.web.schemas import TraceOut
 
 router = APIRouter(prefix="/api/conversations", tags=["chat"])
@@ -149,13 +156,7 @@ async def send(
     texto: separarlos obligaria al usuario a subir y luego escribir, que no es
     como funciona un chat.
     """
-    upload: tuple[str, bytes] | None = None
-    if file is not None and file.filename:
-        content = await file.read()
-        if len(content) > MAX_UPLOAD_BYTES:
-            raise ValueError("El archivo supera el tamano maximo admitido")
-        upload = (file.filename, content)
-
+    upload = await _read_upload(file)
     turn = await container.chat(session).send(
         owner_id, conversation_id, text=text, upload=upload
     )
@@ -170,6 +171,92 @@ async def send(
         ),
         trace=TraceOut.of(turn.trace),
     )
+
+
+@router.post("/{conversation_id}/messages/stream")
+async def send_streaming(
+    conversation_id: str,
+    container: ContainerDep,
+    session: SessionDep,
+    owner_id: OwnerDep,
+    text: Annotated[str, Form()] = "",
+    file: Annotated[UploadFile | None, File()] = None,
+) -> StreamingResponse:
+    """Lo mismo que enviar, contando por el camino que esta haciendo el agente.
+
+    Explorar un libro de once hojas lleva sus segundos. Ver "Mirando la hoja
+    INVENTARIO" en vez de tres puntos es la diferencia entre esperar y dudar de
+    si se ha colgado.
+    """
+    upload = await _read_upload(file)
+    return StreamingResponse(
+        _events(conversation_id, text, upload, container, session, owner_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+async def _events(
+    conversation_id: str,
+    text: str,
+    upload: tuple[str, bytes] | None,
+    container: ContainerDep,
+    session: SessionDep,
+    owner_id: OwnerDep,
+) -> AsyncIterator[str]:
+    activities: asyncio.Queue[str | None] = asyncio.Queue()
+
+    def watch(step: AgentStep) -> None:
+        # Solo se retransmite lo que significa algo para quien espera. El
+        # contenido crudo del modelo es largo y no le dice nada.
+        if step.kind is StepKind.TOOL and step.content:
+            activities.put_nowait(step.content)
+
+    chat = container.chat(session)
+    task = asyncio.create_task(
+        chat.send(owner_id, conversation_id, text=text, upload=upload, observer=watch)
+    )
+    task.add_done_callback(lambda _: activities.put_nowait(None))
+
+    while True:
+        activity = await activities.get()
+        if activity is None:
+            break
+        yield _event("activity", {"text": activity})
+
+    try:
+        turn = await task
+    except DomainError as error:
+        # La cabecera ya viajo: un fallo tardio solo puede llegar como evento.
+        yield _event("error", as_payload(error).model_dump())
+        return
+
+    rendered = await chat.history(owner_id, conversation_id)
+    by_id = {item.message.id: item for item in rendered}
+    yield _event(
+        "turn",
+        TurnOut(
+            user_message=MessageOut.plain(turn.user_message),
+            assistant_message=MessageOut.of(
+                by_id.get(turn.assistant_message.id)
+                or RenderedMessage(message=turn.assistant_message)
+            ),
+            trace=TraceOut.of(turn.trace),
+        ).model_dump(mode="json"),
+    )
+
+
+def _event(name: str, payload: object) -> str:
+    return f"event: {name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+async def _read_upload(file: UploadFile | None) -> tuple[str, bytes] | None:
+    if file is None or not file.filename:
+        return None
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise ValueError("El archivo supera el tamano maximo admitido")
+    return (file.filename, content)
 
 
 def _artifact(artifact: Any, data: VisualData | None, error: str | None) -> ArtifactOut:

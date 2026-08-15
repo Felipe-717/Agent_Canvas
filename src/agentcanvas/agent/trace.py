@@ -20,6 +20,10 @@ class StepKind(StrEnum):
     PROPOSAL = "proposal"
     """El modelo devolvio algo."""
 
+    TOOL = "tool"
+    """El agente esta usando una herramienta. `content` lo cuenta en palabras,
+    para poder ensenarselo al usuario mientras espera."""
+
     REJECTED = "rejected"
     """Lo devuelto no paso la validacion; se le devolvieron los problemas."""
 

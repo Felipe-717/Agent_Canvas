@@ -42,9 +42,29 @@ class Tool(BaseModel):
     definition: ToolDefinition
     handler: ToolHandler
 
+    activity: str = ""
+    """Plantilla de lo que se le ensena al usuario mientras corre, con los
+    argumentos entre llaves: "Mirando la hoja {hoja}". La escribe quien define
+    la herramienta porque es quien sabe que esta pasando."""
+
     @property
     def name(self) -> str:
         return self.definition.name
+
+    def describe(self, arguments: dict[str, Any]) -> str:
+        if not self.activity:
+            return ""
+        try:
+            return self.activity.format_map(_Missing(arguments))
+        except Exception:
+            return self.activity
+
+
+class _Missing(dict[str, Any]):
+    """Un argumento ausente no puede tumbar un mensaje de progreso."""
+
+    def __missing__(self, key: str) -> str:
+        return "…"
 
 
 class Toolbox:
@@ -60,6 +80,10 @@ class Toolbox:
     @property
     def names(self) -> tuple[str, ...]:
         return tuple(self._tools)
+
+    def describe(self, name: str, arguments: dict[str, Any]) -> str:
+        tool = self._tools.get(name)
+        return tool.describe(arguments) if tool else ""
 
     async def run(self, name: str, arguments: dict[str, Any]) -> ToolOutcome:
         tool = self._tools.get(name)
@@ -86,8 +110,10 @@ def tool(
     description: str,
     parameters: dict[str, Any],
     handler: ToolHandler,
+    activity: str = "",
 ) -> Tool:
     return Tool(
         definition=ToolDefinition(name=name, description=description, parameters=parameters),
         handler=handler,
+        activity=activity,
     )
