@@ -20,7 +20,9 @@ export function Card({
   dragHandle?: boolean;
 }) {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-card border border-bone-300 bg-bone-50 shadow-paper">
+    // `relative`: el panel de "cómo se calcula" se coloca encima del cuerpo,
+    // porque en el lienzo la altura la fija la rejilla y no hay sitio abajo.
+    <div className="relative flex h-full flex-col overflow-hidden rounded-card border border-bone-300 bg-bone-50 shadow-paper">
       <header
         className={`flex items-start justify-between gap-2 border-b border-bone-200 px-3 py-2 ${
           dragHandle ? "card-drag-handle cursor-grab active:cursor-grabbing" : ""
@@ -32,7 +34,7 @@ export function Card({
         </div>
         {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
       </header>
-      <div className="min-h-0 flex-1 p-2">{children}</div>
+      <div className="min-h-0 flex-1 overflow-hidden p-2">{children}</div>
       {footer}
     </div>
   );
