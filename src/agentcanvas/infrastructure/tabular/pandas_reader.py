@@ -1,4 +1,4 @@
-"""Lectura de CSV/XLSX con pandas e inferencia de tipos logicos.
+﻿"""Lectura de CSV/XLSX con pandas e inferencia de tipos logicos.
 
 Aqui vive toda la fealdad de los archivos reales: encodings raros, separadores
 que no son comas, cabeceras con acentos y espacios, columnas fantasma que Excel
@@ -46,10 +46,7 @@ class PandasTabularReader:
         destination: Path,
         preview_rows: int = 10,
     ) -> NormalizedTable:
-        frame = _load(source)
-        frame = _drop_ghost_columns(frame)
-        frame = _rename_to_normalized(frame)
-        frame = _coerce_dates(frame)
+        frame = finalize(_load(source))
 
         destination.parent.mkdir(parents=True, exist_ok=True)
         frame.to_parquet(destination, index=False)
@@ -58,7 +55,7 @@ class PandasTabularReader:
             ColumnSchema(
                 name=str(name),
                 original_name=str(original),
-                type=_logical_type(frame[name]),
+                type=logical_type(frame[name]),
                 nullable=bool(frame[name].isna().any()),
             )
             for name, original in zip(frame.columns, frame.attrs["original_names"], strict=True)
@@ -66,8 +63,18 @@ class PandasTabularReader:
         return NormalizedTable(
             schema_=DatasetSchema(columns=columns),
             row_count=len(frame),
-            preview=_preview(frame, preview_rows),
+            preview=preview_rows_of(frame, preview_rows),
         )
+
+
+def finalize(frame: pd.DataFrame) -> pd.DataFrame:
+    """Deja un DataFrame en forma canonica.
+
+    Publico porque lo comparten los dos lectores: el simple, que asume un
+    archivo limpio, y el exploratorio, que rescata una tabla de un Excel
+    caotico. Ambos deben producir exactamente la misma forma.
+    """
+    return _coerce_dates(_rename_to_normalized(_drop_ghost_columns(frame)))
 
 
 def _load(source: Path) -> pd.DataFrame:
@@ -144,7 +151,7 @@ def _coerce_dates(frame: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def _logical_type(series: pd.Series[Any]) -> ColumnType:
+def logical_type(series: pd.Series[Any]) -> ColumnType:
     if pdt.is_bool_dtype(series):
         return ColumnType.BOOLEAN
     if pdt.is_integer_dtype(series):
@@ -162,7 +169,7 @@ def _logical_type(series: pd.Series[Any]) -> ColumnType:
     return ColumnType.UNKNOWN
 
 
-def _preview(frame: pd.DataFrame, rows: int) -> tuple[dict[str, object], ...]:
+def preview_rows_of(frame: pd.DataFrame, rows: int) -> tuple[dict[str, object], ...]:
     head = frame.head(rows)
     # `mode="json"`-ish: fechas y NaN deben salir serializables para el LLM y la API.
     records = head.astype(object).where(pd.notna(head), None).to_dict(orient="records")
@@ -175,3 +182,4 @@ def _jsonable(value: Any) -> object:
     if isinstance(value, pd.Timestamp):
         return value.isoformat()
     return value
+
