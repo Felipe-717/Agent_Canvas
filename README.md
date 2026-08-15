@@ -47,25 +47,50 @@ grafico se recalcula solo al llegar datos nuevos.
 
 ## Puesta en marcha
 
-```bash
+Los comandos van uno por linea a proposito: PowerShell 5.1, que es el que trae
+Windows por defecto, no admite `&&` para encadenar.
+
+```powershell
 conda env create -f environment.yml
 conda activate agentcanvas
-copy .env.example .env   # y poner la API key
+copy .env.example .env
 alembic upgrade head
 pytest
 ```
 
-Levantar la API:
+Falta poner la clave de OpenAI en `LLM_API_KEY` dentro del `.env`.
 
-```bash
+Si `conda activate` responde que no reconoce el comando, es que conda no esta en
+el PATH de esa terminal. Se arregla de una vez con `conda init powershell` y
+abriendo una terminal nueva, o se evita usando el interprete del entorno
+directamente:
+
+```powershell
+& "$env:USERPROFILE\anaconda3\envs\agentcanvas\python.exe" -m uvicorn agentcanvas.main:app --reload
+```
+
+### Levantar la aplicacion
+
+Hacen falta dos terminales. La primera, la API:
+
+```powershell
 uvicorn agentcanvas.main:app --reload
 ```
 
-La documentacion interactiva queda en http://127.0.0.1:8000/docs
+La segunda, el frontend:
 
-Probar el modelo real de una vez (es lo unico que gasta cuota):
+```powershell
+npm run dev --prefix frontend
+```
 
-```bash
+La aplicacion queda en http://localhost:5173 y la documentacion interactiva de
+la API en http://127.0.0.1:8000/docs
+
+### Probar el modelo real
+
+Es lo unico del repositorio que gasta cuota. Alrededor de $0.0004 por peticion.
+
+```powershell
 python scripts/smoke_visual.py "top 3 productos por venta"
 ```
 

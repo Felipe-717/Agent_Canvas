@@ -4,14 +4,19 @@ Diseno completo en `AgentCanvas_AI.md`. Este archivo son las reglas de trabajo.
 
 ## Entorno
 
-Conda, entorno `agentcanvas` (Python 3.12):
+Conda, entorno `agentcanvas` (Python 3.12). En PowerShell 5.1 los comandos no se
+encadenan con `&&`; van en lineas separadas o unidos por `;`.
 
-```bash
+```powershell
 conda activate agentcanvas
 pytest
 ruff check src tests
 mypy
 ```
+
+Si conda no esta en el PATH de la terminal, el interprete del entorno funciona
+igual sin activar nada:
+`& "$env:USERPROFILE\anaconda3\envs\agentcanvas\python.exe" -m pytest`
 
 Las libs con binarios pesados (pandas, pyarrow, openpyxl) van en `environment.yml`
 desde conda-forge. El resto en `pyproject.toml`.
