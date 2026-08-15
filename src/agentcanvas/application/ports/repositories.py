@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from agentcanvas.domain.chat.entities import ChatMessage, Conversation
 from agentcanvas.domain.dataset.entities import Dataset, DatasetVersion, StoredFile
 from agentcanvas.domain.visual.dashboard import Dashboard, Visual
 
@@ -49,6 +50,22 @@ class DatasetRepositoryPort(Protocol):
     async def get_version(self, version_id: str) -> DatasetVersion | None: ...
 
     async def list_versions(self, dataset_id: str) -> list[DatasetVersion]: ...
+
+
+class ConversationRepositoryPort(Protocol):
+    async def add(self, conversation: Conversation) -> None: ...
+
+    async def get(self, conversation_id: str) -> Conversation | None: ...
+
+    async def list_for_owner(self, owner_id: str) -> list[Conversation]: ...
+
+    async def update(self, conversation: Conversation) -> None: ...
+
+    async def delete(self, conversation_id: str) -> None: ...
+
+    async def add_message(self, message: ChatMessage) -> None: ...
+
+    async def list_messages(self, conversation_id: str) -> list[ChatMessage]: ...
 
 
 class DashboardRepositoryPort(Protocol):

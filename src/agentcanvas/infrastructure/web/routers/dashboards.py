@@ -91,12 +91,40 @@ async def create(
     return DashboardOut.of(await container.dashboards(session).create(owner_id, body.name))
 
 
-@router.get("", response_model=list[DashboardOut])
+class SourceOut(BaseModel):
+    id: str
+    name: str
+
+
+class DashboardListItemOut(BaseModel):
+    """Un lienzo en la lista, con las fuentes de las que bebe.
+
+    Se exponen para poder agrupar la lista por origen sin obligar a que un
+    lienzo pertenezca a uno solo: puede mezclar varios.
+    """
+
+    id: str
+    name: str
+    visual_count: int
+    sources: list[SourceOut]
+    updated_at: datetime
+
+
+@router.get("", response_model=list[DashboardListItemOut])
 async def list_dashboards(
     container: ContainerDep, session: SessionDep, owner_id: OwnerDep
-) -> list[DashboardOut]:
-    dashboards = await container.dashboards(session).list_all(owner_id)
-    return [DashboardOut.of(dashboard) for dashboard in dashboards]
+) -> list[DashboardListItemOut]:
+    summaries = await container.dashboards(session).list_all(owner_id)
+    return [
+        DashboardListItemOut(
+            id=summary.dashboard.id,
+            name=summary.dashboard.name,
+            visual_count=summary.visual_count,
+            sources=[SourceOut(id=source.id, name=source.name) for source in summary.sources],
+            updated_at=summary.dashboard.updated_at,
+        )
+        for summary in summaries
+    ]
 
 
 @router.get("/{dashboard_id}", response_model=DashboardDetailOut)

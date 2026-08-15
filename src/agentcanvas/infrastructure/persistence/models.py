@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from agentcanvas.domain.chat.entities import MessageContent
 from agentcanvas.domain.dataset.schema import DatasetSchema
 from agentcanvas.domain.visual.dashboard import Placement
 from agentcanvas.domain.visual.spec import VisualSpec
@@ -54,6 +55,36 @@ class DatasetRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_datasets_owner_fingerprint", "owner_id", "fingerprint"),)
+
+
+class ConversationRow(Base):
+    __tablename__ = "conversations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(64), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ChatMessageRow(Base):
+    """Un mensaje de la conversacion.
+
+    `content` guarda adjuntos y artefactos juntos en un JSON: son datos que solo
+    tienen sentido dentro de su mensaje y que nunca se consultan por separado.
+    De un grafico se guarda su especificacion, jamas sus numeros.
+    """
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(16))
+    text: Mapped[str] = mapped_column(Text, default="")
+    content: Mapped[MessageContent] = mapped_column(PydanticJSON(MessageContent))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class DashboardRow(Base):

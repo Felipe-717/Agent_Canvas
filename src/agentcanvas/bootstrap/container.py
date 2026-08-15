@@ -24,12 +24,17 @@ from agentcanvas.application.ports.repositories import (
 )
 from agentcanvas.application.ports.storage import FileStoragePort
 from agentcanvas.application.ports.tabular import TabularReaderPort
+from agentcanvas.application.ports.workbook import WorkbookReaderPort
+from agentcanvas.application.use_cases.chat import ChatService
 from agentcanvas.application.use_cases.create_visual import CreateVisualUseCase
 from agentcanvas.application.use_cases.dashboards import DashboardService
 from agentcanvas.application.use_cases.ingest_file import IngestFileUseCase
 from agentcanvas.application.use_cases.render_visual import RenderVisualUseCase
 from agentcanvas.config import Settings, get_settings
 from agentcanvas.infrastructure.llm.factory import build_llm
+from agentcanvas.infrastructure.persistence.conversations import (
+    SqlAlchemyConversationRepository,
+)
 from agentcanvas.infrastructure.persistence.dashboards import SqlAlchemyDashboardRepository
 from agentcanvas.infrastructure.persistence.repositories import (
     SqlAlchemyDatasetRepository,
@@ -40,6 +45,7 @@ from agentcanvas.infrastructure.persistence.session import build_engine, build_s
 from agentcanvas.infrastructure.query.pandas_engine import PandasQueryEngine
 from agentcanvas.infrastructure.storage.local_file_storage import LocalFileStorage
 from agentcanvas.infrastructure.tabular.pandas_reader import PandasTabularReader
+from agentcanvas.infrastructure.tabular.workbook_reader import OpenpyxlWorkbookReader
 
 
 @dataclass(frozen=True)
@@ -51,7 +57,20 @@ class Container:
     reader: TabularReaderPort
     query_engine: QueryEnginePort
     sampler: DatasetSamplerPort
+    workbook: WorkbookReaderPort
     llm: LLMPort
+
+    def chat(self, session: AsyncSession) -> ChatService:
+        return ChatService(
+            llm=self.llm,
+            conversations=SqlAlchemyConversationRepository(session),
+            datasets=SqlAlchemyDatasetRepository(session),
+            files=SqlAlchemyStoredFileRepository(session),
+            storage=self.storage,
+            workbook=self.workbook,
+            engine=self.query_engine,
+            uow=SqlAlchemyUnitOfWork(session),
+        )
 
     def dashboards(self, session: AsyncSession) -> DashboardService:
         return DashboardService(
@@ -112,5 +131,6 @@ def build_container(settings: Settings | None = None, *, llm: LLMPort | None = N
         reader=reader,
         query_engine=query_engine,
         sampler=sampler,
+        workbook=OpenpyxlWorkbookReader(),
         llm=llm or build_llm(resolved),
     )

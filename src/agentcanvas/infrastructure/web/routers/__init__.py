@@ -1,3 +1,3 @@
-from agentcanvas.infrastructure.web.routers import dashboards, datasets, visuals
+from agentcanvas.infrastructure.web.routers import chat, dashboards, datasets, visuals
 
-__all__ = ["dashboards", "datasets", "visuals"]
+__all__ = ["chat", "dashboards", "datasets", "visuals"]

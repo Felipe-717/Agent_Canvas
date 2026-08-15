@@ -40,6 +40,28 @@ class DashboardView(BaseModel):
     visuals: tuple[RenderedVisual, ...]
 
 
+class DatasetRef(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    name: str
+
+
+class DashboardSummary(BaseModel):
+    """Un lienzo en la lista, con las fuentes de las que bebe.
+
+    Un lienzo puede mezclar datos de varios origenes: cada visual guarda el
+    suyo. Enumerarlos permite agrupar la lista por fuente sin obligar a que un
+    lienzo pertenezca a una sola.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    dashboard: Dashboard
+    visual_count: int
+    sources: tuple[DatasetRef, ...]
+
+
 class DashboardService:
     """Agrupa las operaciones sobre dashboards.
 
@@ -68,11 +90,33 @@ class DashboardService:
         await self._uow.commit()
         return dashboard
 
-    async def list_all(self, owner_id: str) -> list[Dashboard]:
+    async def list_all(self, owner_id: str) -> list[DashboardSummary]:
         # No se llama `list`: dentro del cuerpo de la clase eso sombrea al
         # builtin y las anotaciones `-> list[...]` de los demas metodos pasan
         # a referirse a este metodo.
-        return await self._dashboards.list_for_owner(owner_id)
+        summaries: list[DashboardSummary] = []
+        for dashboard in await self._dashboards.list_for_owner(owner_id):
+            visuals = await self._dashboards.list_visuals(dashboard.id)
+            summaries.append(
+                DashboardSummary(
+                    dashboard=dashboard,
+                    visual_count=len(visuals),
+                    sources=await self._sources(visuals),
+                )
+            )
+        return summaries
+
+    async def _sources(self, visuals: list[Visual]) -> tuple[DatasetRef, ...]:
+        refs: dict[str, DatasetRef] = {}
+        for visual in visuals:
+            if visual.dataset_id in refs:
+                continue
+            dataset = await self._datasets.get(visual.dataset_id)
+            refs[visual.dataset_id] = DatasetRef(
+                id=visual.dataset_id,
+                name=dataset.name if dataset else "(origen eliminado)",
+            )
+        return tuple(refs.values())
 
     async def rename(self, owner_id: str, dashboard_id: str, name: str) -> Dashboard:
         dashboard = await self._require(owner_id, dashboard_id)
