@@ -7,6 +7,7 @@ en la misma hoja, totales al pie, y hojas auxiliares vacias.
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import openpyxl
@@ -248,3 +249,118 @@ def test_the_description_is_readable_for_a_human() -> None:
     assert "Camas" in described
     assert "cabecera en la fila 3" in described
     assert "columnas 4-6" in described
+
+
+# --------------------------------------------------------------------- avisos
+
+
+def test_side_by_side_tables_are_reported_not_silently_merged(
+    reader: OpenpyxlWorkbookReader, messy: Path, tmp_path: Path
+) -> None:
+    # Extraer las dos camas de golpe no falla: produce una tabla de seis
+    # columnas que parece correcta. Callarselo es lo que genera graficos que
+    # solo cubren la primera tabla sin que nadie se entere.
+    table = reader.extract(
+        messy,
+        TableSpec(sheet="Camas", header_row=3, last_data_row=5, first_column=1, last_column=6),
+        destination=tmp_path / "o.parquet",
+    )
+
+    assert table.schema_.column_names == (
+        "fecha", "semilla", "cantidad", "fecha_2", "semilla_2", "cantidad_2",
+    )
+    aviso = next(w for w in table.warnings if "repite" in w)
+    assert "2 veces" in aviso
+    assert "primera_columna" in aviso
+
+
+def test_a_single_table_raises_no_alarm(
+    reader: OpenpyxlWorkbookReader, messy: Path, tmp_path: Path
+) -> None:
+    table = reader.extract(
+        messy,
+        TableSpec(sheet="Camas", header_row=3, last_data_row=5, first_column=1, last_column=3),
+        destination=tmp_path / "o.parquet",
+    )
+
+    assert not any("repite" in warning for warning in table.warnings)
+
+
+def test_rows_with_an_empty_first_column_are_reported(
+    reader: OpenpyxlWorkbookReader, tmp_path: Path
+) -> None:
+    # Una fila de totales entra como si fuera un dato mas y encabeza cualquier
+    # "top 10". Paso de verdad con un inventario real.
+    book = openpyxl.Workbook()
+    sheet = book.active
+    assert sheet is not None
+    for column, name in enumerate(["especie", "cantidad"], start=1):
+        sheet.cell(row=1, column=column, value=name)
+    sheet.cell(row=2, column=1, value="Aguacatillo")
+    sheet.cell(row=2, column=2, value=422)
+    sheet.cell(row=3, column=2, value=3452)  # total, sin nombre
+    path = tmp_path / "inventario.xlsx"
+    book.save(path)
+
+    table = reader.extract(
+        path, TableSpec(sheet=sheet.title, header_row=1), destination=tmp_path / "o.parquet"
+    )
+
+    aviso = next(w for w in table.warnings if "vacio" in w)
+    assert "1 fila" in aviso
+    assert "ultima_fila_datos" in aviso
+
+
+def test_a_totals_row_no_longer_breaks_the_extraction(
+    reader: OpenpyxlWorkbookReader, tmp_path: Path
+) -> None:
+    # La palabra TOTAL en una columna de fechas hacia que Parquet se negara a
+    # escribir el archivo entero, con un error de Arrow que no le decia nada a
+    # nadie. Leerla como texto y avisar es recuperable.
+    book = openpyxl.Workbook()
+    sheet = book.active
+    assert sheet is not None
+    for column, name in enumerate(["fecha", "cantidad"], start=1):
+        sheet.cell(row=1, column=column, value=name)
+    # Una fecha de verdad: openpyxl devuelve datetime, y ahi es donde choca
+    # con el texto de la fila de totales.
+    sheet.cell(row=2, column=1, value=datetime(2026, 1, 10))
+    sheet.cell(row=2, column=2, value=144)
+    sheet.cell(row=3, column=1, value="TOTAL")
+    sheet.cell(row=3, column=2, value=144)
+    path = tmp_path / "con_total.xlsx"
+    book.save(path)
+
+    table = reader.extract(
+        path, TableSpec(sheet=sheet.title, header_row=1), destination=tmp_path / "o.parquet"
+    )
+
+    assert table.row_count == 2
+    assert any("mezclan varios tipos" in warning for warning in table.warnings)
+
+
+def test_a_repeated_group_is_detected_despite_small_variations(
+    reader: OpenpyxlWorkbookReader, tmp_path: Path
+) -> None:
+    # En la hoja real, una cama ponia "chapola" donde las demas ponen "semilla".
+    # Exigir un patron perfecto hacia que el aviso no saltara justo ahi.
+    book = openpyxl.Workbook()
+    sheet = book.active
+    assert sheet is not None
+    cabecera = ["fecha", "semilla", "cantidad", "fecha", "chapola", "cantidad"]
+    for column, name in enumerate(cabecera, start=1):
+        sheet.cell(row=1, column=column, value=name)
+    for column in range(1, 7):
+        sheet.cell(row=2, column=column, value=column)
+    path = tmp_path / "variado.xlsx"
+    book.save(path)
+
+    table = reader.extract(
+        path, TableSpec(sheet=sheet.title, header_row=1), destination=tmp_path / "o.parquet"
+    )
+
+    aviso = next(w for w in table.warnings if "repite" in w)
+    assert "fecha" in aviso and "cantidad" in aviso
+    # Y explica donde vive la identidad de cada bloque, que es lo que el modelo
+    # no adivinaba: buscaba "CAMA 2" como si fuera un valor de los datos.
+    assert "fila de encima" in aviso

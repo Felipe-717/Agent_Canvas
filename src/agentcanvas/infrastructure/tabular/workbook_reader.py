@@ -8,12 +8,15 @@ cuando la cabecera esta en la fila 11 y hay tres tablas en la misma hoja.
 from __future__ import annotations
 
 import csv
+import re
+from collections import Counter
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 import openpyxl
 import pandas as pd
+from pandas.api import types as pdt
 
 from agentcanvas.application.ports.tabular import NormalizedTable
 from agentcanvas.domain.workbook.structure import (
@@ -30,6 +33,9 @@ from agentcanvas.infrastructure.tabular.normalize import (
 )
 
 _CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
+_MAX_NAMED_COLUMNS = 4
+"""Cuantas columnas se nombran en un aviso antes de resumir."""
+
 _MAX_SCAN_ROWS = 2000
 """Tope al medir densidad: un libro de 100k filas no necesita recorrerse entero
 para saber si su primera hoja tiene pinta de tabla."""
@@ -260,6 +266,7 @@ def _normalize(frame: pd.DataFrame, destination: Path) -> NormalizedTable:
     from agentcanvas.domain.dataset.schema import ColumnSchema, DatasetSchema
 
     frame = finalize(frame)
+    frame, mixed = _unify_mixed_columns(frame)
     destination.parent.mkdir(parents=True, exist_ok=True)
     frame.to_parquet(destination, index=False)
 
@@ -276,4 +283,91 @@ def _normalize(frame: pd.DataFrame, destination: Path) -> NormalizedTable:
         schema_=DatasetSchema(columns=columns),
         row_count=len(frame),
         preview=preview_rows_of(frame, 10),
+        warnings=_warnings(frame) + mixed,
     )
+
+
+def _unify_mixed_columns(frame: pd.DataFrame) -> tuple[pd.DataFrame, tuple[str, ...]]:
+    """Pasa a texto las columnas que mezclan tipos.
+
+    Una fila de totales pone la palabra TOTAL en una columna de fechas, y
+    entonces Parquet se niega a escribir el archivo entero. Antes eso rompia la
+    extraccion con un error de Arrow que no le dice nada a nadie; ahora la
+    columna se lee como texto y se avisa, que es recuperable.
+    """
+    afectadas: list[str] = []
+    for column in frame.columns:
+        series = frame[column]
+        if not pdt.is_object_dtype(series):
+            continue
+        present = series.dropna()
+        if present.empty or len({type(value) for value in present}) == 1:
+            continue
+        frame[column] = series.map(lambda value: None if pd.isna(value) else str(value))
+        afectadas.append(str(column))
+
+    if not afectadas:
+        return frame, ()
+    # Un aviso por columna serian veinte lineas en una hoja ancha: mucho
+    # contexto y ninguna informacion nueva a partir de la segunda.
+    nombres = ", ".join(afectadas[:_MAX_NAMED_COLUMNS])
+    resto = len(afectadas) - _MAX_NAMED_COLUMNS
+    if resto > 0:
+        nombres += f" y {resto} mas"
+    return frame, (
+        f"{len(afectadas)} columna(s) mezclan varios tipos de dato y se han leido "
+        f"como texto ({nombres}). Suele pasar cuando una fila de totales o un "
+        f"encabezado se cuela entre los datos; si es el caso, acota "
+        f"`ultima_fila_datos`.",
+    )
+
+
+def _warnings(frame: pd.DataFrame) -> tuple[str, ...]:
+    """Lo que huele raro en una extraccion que no ha fallado."""
+    avisos: list[str] = []
+
+    repetido = _repeated_group([str(column) for column in frame.columns])
+    if repetido is not None:
+        grupo, veces = repetido
+        avisos.append(
+            f"La cabecera repite ({', '.join(grupo)}) hasta {veces} veces. Casi "
+            f"seguro son {veces} tablas puestas una al lado de otra, no una sola: "
+            f"cada bloque de columnas es una tabla distinta, y su identidad esta "
+            f"en la fila de encima, no dentro de los datos. Prepara UNA sola "
+            f"acotando `primera_columna` y `ultima_columna`, y pregunta al usuario "
+            f"cual quiere si no lo ha dicho."
+        )
+
+    if len(frame.columns) > 0:
+        primera = frame.columns[0]
+        huecos = int(frame[primera].isna().sum())
+        if huecos:
+            avisos.append(
+                f"Hay {huecos} fila(s) con '{primera}' vacio. Suelen ser totales o "
+                f"separadores, y falsean cualquier suma o maximo. Si lo son, "
+                f"vuelve a preparar acotando `ultima_fila_datos`."
+            )
+    return tuple(avisos)
+
+
+def _repeated_group(names: list[str]) -> tuple[tuple[str, ...], int] | None:
+    """Nombres de columna que se repiten, si delatan tablas puestas en paralelo.
+
+    No se busca periodicidad exacta. Las cabeceras reales tienen variaciones -en
+    una hoja con nueve camas de germinacion, una ponia `chapola` donde las demas
+    ponen `semilla`- y exigir un patron perfecto hacia que no saltara el aviso
+    justo en el caso que mas importaba.
+    """
+    bases = [re.sub(r"_\d+$", "", name) for name in names]
+    counts = Counter(bases)
+    repeated = {name: n for name, n in counts.items() if n > 1}
+    if not repeated:
+        return None
+
+    veces = max(repeated.values())
+    # Dos columnas con el mismo nombre son una cabecera duplicada. Que se repita
+    # un grupo entero, o que una sola se repita tres veces, ya es otra cosa.
+    if veces < 3 and len(repeated) < 2:
+        return None
+    grupo = tuple(dict.fromkeys(name for name in bases if name in repeated))
+    return grupo, veces
