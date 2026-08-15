@@ -83,6 +83,11 @@ function ArtifactCard({
 }
 
 function DatasetCard({ artifact }: { artifact: Artifact }) {
+  // Tolerante a que falten: una respuesta de un backend mas antiguo, o una
+  // conversacion cacheada, no puede dejar la pantalla en blanco.
+  const warnings = artifact.warnings ?? [];
+  const preview = artifact.preview ?? [];
+
   return (
     <div className="w-full max-w-[46rem] rounded-card border border-bone-300 bg-bone-50 px-3.5 py-3">
       <div className="flex items-center gap-2">
@@ -98,9 +103,9 @@ function DatasetCard({ artifact }: { artifact: Artifact }) {
 
       {/* Lo que olió raro. Antes solo lo veía el modelo, y una extracción
           sospechosa pasaba inadvertida hasta que un gráfico salía mal. */}
-      {artifact.warnings.length > 0 && (
+      {warnings.length > 0 && (
         <ul className="mt-2 space-y-1 rounded border border-notice/30 bg-notice/5 px-2.5 py-1.5">
-          {artifact.warnings.map((warning) => (
+          {warnings.map((warning) => (
             <li key={warning} className="text-xs text-ink-700">
               {warning}
             </li>
@@ -110,9 +115,9 @@ function DatasetCard({ artifact }: { artifact: Artifact }) {
 
       {/* Las primeras filas: es lo que permite decir "esa no es la tabla que
           quería" antes de construir nada encima. */}
-      {artifact.preview.length > 0 && <Peek rows={artifact.preview} />}
+      {preview.length > 0 && <Peek rows={preview} />}
 
-      {artifact.preview.length === 0 && (
+      {preview.length === 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {(artifact.columns ?? []).map((column) => (
             <span
