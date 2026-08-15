@@ -91,7 +91,13 @@ export default function App() {
         <DataPanel
           datasets={datasets}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={(dataset) => {
+            setSelected(dataset);
+            // Elegir un conjunto de datos es querer preguntarle algo. Sin esto,
+            // subir un archivo desde la pestana del panel no produce ningun
+            // cambio visible donde el usuario esta mirando.
+            setTab("explore");
+          }}
           onChanged={() => {
             void loadDatasets();
             void refreshBoard();
