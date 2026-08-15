@@ -7,6 +7,9 @@ disponibles.
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from agentcanvas.domain.dataset.schema import ColumnSchema, ColumnType, DatasetSchema
 from agentcanvas.domain.visual.spec import (
     Aggregation,
@@ -19,7 +22,7 @@ from agentcanvas.domain.visual.spec import (
     TimeGrain,
     VisualSpec,
 )
-from agentcanvas.domain.visual.validation import validate_spec
+from agentcanvas.domain.visual.validation import canonicalize, validate_spec
 
 SCHEMA = DatasetSchema(
     columns=(
@@ -217,3 +220,76 @@ def test_the_axis_and_the_grouping_cannot_be_the_same_column() -> None:
     )
     assert validate_spec(spec, SCHEMA)
 
+
+
+def test_column_names_are_canonicalised_to_the_schema() -> None:
+    # El modelo nombra las columnas como las ve en el archivo. La validacion
+    # siempre normalizo al comprobar, pero la ejecucion usaba el nombre crudo:
+    # la spec pasaba el control y reventaba despues al leer el Parquet.
+    spec = VisualSpec(
+        type=ChartType.BAR,
+        title="x",
+        x=Dimension(field="Región"),
+        y=(Measure(field="Valor Total", aggregation=Aggregation.SUM),),
+        filters=(Filter(field="Región", operator=FilterOperator.EQ, value="Norte"),),
+    )
+    schema = DatasetSchema(
+        columns=(
+            ColumnSchema.create("Región", ColumnType.STRING),
+            ColumnSchema.create("Valor Total", ColumnType.FLOAT),
+        )
+    )
+
+    canonical = canonicalize(spec, schema)
+
+    assert canonical.x is not None
+    assert canonical.x.field == "region"
+    assert canonical.y[0].field == "valor_total"
+    assert canonical.filters[0].field == "region"
+
+
+def test_canonicalising_an_already_correct_spec_changes_nothing() -> None:
+    spec = VisualSpec(
+        type=ChartType.KPI, title="x", y=(Measure(field="valor", aggregation=Aggregation.SUM),)
+    )
+
+    assert canonicalize(spec, SCHEMA) == spec
+
+
+def test_an_unknown_column_survives_canonicalisation_to_be_reported() -> None:
+    # Si se inventara un nombre, el error debe seguir diciendo cual.
+    spec = VisualSpec(
+        type=ChartType.BAR,
+        title="x",
+        x=Dimension(field="departamento"),
+        y=(Measure(field="valor"),),
+    )
+
+    problems = validate_spec(canonicalize(spec, SCHEMA), SCHEMA)
+
+    assert any("departamento" in problem for problem in problems)
+
+
+def test_an_invented_key_is_rejected_by_name() -> None:
+    # El modelo escribia "column" donde va "field". Ignorarlo en silencio
+    # dejaba una medida sin columna y un error que no explicaba la causa;
+    # le costo ocho intentos dar con la clave correcta.
+    with pytest.raises(ValidationError) as error:
+        VisualSpec.model_validate(
+            {
+                "type": "kpi",
+                "title": "x",
+                "y": [{"column": "valor", "aggregation": "avg"}],
+            }
+        )
+
+    assert "column" in str(error.value)
+
+
+def test_a_measure_without_a_column_names_the_missing_key() -> None:
+    spec = VisualSpec(type=ChartType.KPI, title="x", y=(Measure(aggregation=Aggregation.AVG),))
+
+    problems = validate_spec(spec, SCHEMA)
+
+    # Decir "necesita una columna" no basta: hay que decir como se llama.
+    assert any("`field`" in problem for problem in problems)

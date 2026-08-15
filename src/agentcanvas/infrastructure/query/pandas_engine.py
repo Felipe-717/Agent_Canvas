@@ -27,7 +27,12 @@ from agentcanvas.domain.visual.spec import (
     TimeGrain,
     VisualSpec,
 )
-from agentcanvas.domain.visual.validation import ensure_valid, result_keys, result_type
+from agentcanvas.domain.visual.validation import (
+    canonicalize,
+    ensure_valid,
+    result_keys,
+    result_type,
+)
 
 # Columna sintetica para contar filas sin depender de ninguna columna real.
 _ROW_MARKER = "__row__"
@@ -56,6 +61,9 @@ class PandasQueryEngine:
     """Implementa `QueryEnginePort`."""
 
     def execute(self, spec: VisualSpec, *, source: Path, schema: DatasetSchema) -> VisualData:
+        # Normalizar antes de nada: una spec que nombre las columnas como venian
+        # en el archivo pasa la validacion pero reventaria al leer el Parquet.
+        spec = canonicalize(spec, schema)
         # Validar antes de leer: si la spec esta mal, el error debe ser sobre la
         # spec, no un KeyError de pandas a mitad de un groupby.
         ensure_valid(spec, schema)

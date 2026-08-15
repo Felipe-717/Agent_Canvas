@@ -81,9 +81,14 @@ class FilterOperator(StrEnum):
 
 Scalar = str | float | bool
 
+# `extra="forbid"` en todo lo que el modelo rellena: si escribe "column" donde
+# va "field", pydantic lo dice por su nombre. Ignorarlo en silencio dejaba una
+# medida sin columna y un error que no explicaba la causa.
+STRICT = ConfigDict(frozen=True, extra="forbid")
+
 
 class Filter(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = STRICT
 
     field: str
     """Nombre normalizado de la columna del dataset."""
@@ -99,7 +104,7 @@ class Filter(BaseModel):
 class Dimension(BaseModel):
     """Eje categorico o temporal por el que se agrupa."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = STRICT
 
     field: str
     time_grain: TimeGrain | None = None
@@ -118,7 +123,7 @@ class Dimension(BaseModel):
 class Measure(BaseModel):
     """Valor numerico que se representa."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = STRICT
 
     field: str | None = None
     """Puede ser nulo unicamente con `count`, que cuenta filas."""
@@ -136,7 +141,7 @@ class Measure(BaseModel):
 
 
 class Sort(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = STRICT
 
     by: str
     """Clave del resultado: la de una dimension o la de una medida."""
@@ -145,7 +150,7 @@ class Sort(BaseModel):
 
 
 class VisualSpec(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = STRICT
 
     type: ChartType
     title: str

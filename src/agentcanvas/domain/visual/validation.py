@@ -8,11 +8,14 @@ puede devolver para que se corrija.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from agentcanvas.domain.dataset.schema import ColumnType, DatasetSchema
 from agentcanvas.domain.visual.errors import InvalidVisualSpecError
 from agentcanvas.domain.visual.spec import (
     Aggregation,
     ChartType,
+    Dimension,
     FilterOperator,
     Measure,
     VisualSpec,
@@ -20,6 +23,46 @@ from agentcanvas.domain.visual.spec import (
 
 # Agregaciones que exigen una columna numerica.
 _NUMERIC_ONLY = (Aggregation.SUM, Aggregation.AVG, Aggregation.MEDIAN)
+
+
+def canonicalize(spec: VisualSpec, schema: DatasetSchema) -> VisualSpec:
+    """Reescribe los nombres de columna a su forma normalizada.
+
+    La validacion siempre normalizo al comprobar si una columna existe, asi que
+    una spec que dijera "PetalLengthCm" pasaba el control; la ejecucion, en
+    cambio, usaba el nombre crudo y reventaba al leer el Parquet. Normalizar
+    aqui cierra esa grieta para todos los caminos a la vez, y es inocuo cuando
+    la spec ya venia bien.
+    """
+
+    def name(field: str) -> str:
+        column = schema.get(field)
+        return column.name if column is not None else field
+
+    return spec.model_copy(
+        update={
+            "x": _renamed_dimension(spec.x, name),
+            "group_by": _renamed_dimension(spec.group_by, name),
+            "y": tuple(
+                measure.model_copy(update={"field": name(measure.field)})
+                if measure.field is not None
+                else measure
+                for measure in spec.y
+            ),
+            "filters": tuple(
+                filter.model_copy(update={"field": name(filter.field)})
+                for filter in spec.filters
+            ),
+        }
+    )
+
+
+def _renamed_dimension(
+    dimension: Dimension | None, name: Callable[[str], str]
+) -> Dimension | None:
+    if dimension is None:
+        return None
+    return dimension.model_copy(update={"field": name(dimension.field)})
 
 
 def validate_spec(spec: VisualSpec, schema: DatasetSchema) -> tuple[str, ...]:
@@ -71,7 +114,12 @@ def _measure_problems(spec: VisualSpec, schema: DatasetSchema) -> list[str]:
 def _single_measure_problems(measure: Measure, schema: DatasetSchema) -> list[str]:
     if measure.field is None:
         if measure.aggregation is not Aggregation.COUNT:
-            return [f"La agregacion '{measure.aggregation}' necesita una columna"]
+            # Nombrar la clave, no solo el concepto: sin esto el modelo probaba
+            # "column", "alias" y "column_ref" antes de acertar con "field".
+            return [
+                f"La medida con agregacion '{measure.aggregation}' no dice sobre que "
+                f"columna se calcula: pon el nombre de la columna en el campo `field`"
+            ]
         return []
     column = schema.get(measure.field)
     if column is None:
