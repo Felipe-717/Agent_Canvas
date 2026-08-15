@@ -34,7 +34,10 @@ bootstrap/       unico punto donde se ensambla todo
 - **Fase 1** — dominio de datasets, ingesta de CSV/XLSX con deteccion de schema,
   huella de compatibilidad, persistencia SQLite y migraciones.
 - **Fase 2** — `VisualSpec` tipada, validacion contra el schema y motor de
-  queries determinista. Sin IA todavia.
+  queries determinista.
+- **Fase 3** — puerto del modelo, adaptador compatible con OpenAI, harness con
+  presupuesto y ciclo de correccion, y el agente de visualizaciones.
+- **Fase 4** — API HTTP con FastAPI y streaming SSE del agente.
 
 Lo que ya funciona: subir un CSV o Excel crea un `Dataset` cuyo schema queda como
 contrato; subir despues un archivo del mismo schema crea una version nueva y
@@ -50,6 +53,20 @@ conda activate agentcanvas
 copy .env.example .env   # y poner la API key
 alembic upgrade head
 pytest
+```
+
+Levantar la API:
+
+```bash
+uvicorn agentcanvas.main:app --reload
+```
+
+La documentacion interactiva queda en http://127.0.0.1:8000/docs
+
+Probar el modelo real de una vez (es lo unico que gasta cuota):
+
+```bash
+python scripts/smoke_visual.py "top 3 productos por venta"
 ```
 
 ## Modelo de IA
