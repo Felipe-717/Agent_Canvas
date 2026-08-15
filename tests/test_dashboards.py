@@ -12,7 +12,9 @@ from agentcanvas.bootstrap.container import Container
 from agentcanvas.domain.visual.dashboard import GRID_COLUMNS, Placement
 from agentcanvas.domain.visual.spec import Dimension
 from agentcanvas.infrastructure.persistence.dashboards import SqlAlchemyDashboardRepository
+from agentcanvas.infrastructure.persistence.repositories import SqlAlchemyDatasetRepository
 from agentcanvas.infrastructure.web.app import create_app
+from tests.factories import add_version, make_dataset
 
 ENERO = b"fecha,region,valor\n2026-01-15,Norte,100.0\n2026-01-20,Sur,150.0\n"
 FEBRERO = b"fecha,region,valor\n2026-02-10,Norte,120.0\n2026-02-11,Este,60.0\n"
@@ -38,13 +40,20 @@ async def client(container: Container) -> AsyncIterator[AsyncClient]:
         yield c
 
 
-async def _dataset(client: AsyncClient, content: bytes = ENERO, **data: str) -> str:
-    response = await client.post(
-        "/api/datasets", files={"file": ("ventas.csv", content, "text/csv")}, data=data
-    )
-    assert response.status_code == 201, response.text
-    dataset_id: str = response.json()["dataset"]["id"]
-    return dataset_id
+async def _dataset(container: Container, content: bytes = ENERO) -> str:
+    dataset = await make_dataset(container, name="ventas", csv=content)
+    return dataset.id
+
+
+async def _refresh(container: Container, dataset_id: str, content: bytes) -> None:
+    """Llega un archivo nuevo para el mismo conjunto de datos."""
+    session = container.session_factory()
+    try:
+        dataset = await SqlAlchemyDatasetRepository(session).get(dataset_id)
+    finally:
+        await session.close()
+    assert dataset is not None
+    await add_version(container, dataset, content)
 
 
 async def _dashboard(client: AsyncClient, name: str = "Ventas") -> str:
@@ -92,9 +101,11 @@ async def test_a_dashboard_starts_empty(client: AsyncClient) -> None:
     assert body["grid_columns"] == GRID_COLUMNS
 
 
-async def test_visuals_stack_downwards_as_they_are_added(client: AsyncClient) -> None:
+async def test_visuals_stack_downwards_as_they_are_added(
+    client: AsyncClient, container: Container
+) -> None:
     dashboard = await _dashboard(client)
-    dataset = await _dataset(client)
+    dataset = await _dataset(container)
 
     first = await _add(client, dashboard, dataset, POR_REGION)
     second = await _add(client, dashboard, dataset, TOTAL)
@@ -104,9 +115,11 @@ async def test_visuals_stack_downwards_as_they_are_added(client: AsyncClient) ->
     assert second["placement"]["y"] == first["placement"]["height"]
 
 
-async def test_opening_a_dashboard_computes_the_numbers(client: AsyncClient) -> None:
+async def test_opening_a_dashboard_computes_the_numbers(
+    client: AsyncClient, container: Container
+) -> None:
     dashboard = await _dashboard(client)
-    dataset = await _dataset(client)
+    dataset = await _dataset(container)
     await _add(client, dashboard, dataset, POR_REGION)
 
     body = (await client.get(f"/api/dashboards/{dashboard}")).json()
@@ -118,14 +131,14 @@ async def test_opening_a_dashboard_computes_the_numbers(client: AsyncClient) -> 
 
 
 async def test_the_whole_dashboard_updates_when_a_new_file_arrives(
-    client: AsyncClient,
+    client: AsyncClient, container: Container
 ) -> None:
     dashboard = await _dashboard(client)
-    dataset = await _dataset(client)
+    dataset = await _dataset(container)
     await _add(client, dashboard, dataset, POR_REGION)
     await _add(client, dashboard, dataset, TOTAL)
 
-    await _dataset(client, FEBRERO, dataset_id=dataset)
+    await _refresh(container, dataset, FEBRERO)
     body = (await client.get(f"/api/dashboards/{dashboard}")).json()
 
     # Esto es todo el producto en un assert: dos graficos guardados hace rato,
@@ -138,9 +151,9 @@ async def test_the_whole_dashboard_updates_when_a_new_file_arrives(
     assert total["data"]["rows"] == [{"sum_valor": 180.0}]
 
 
-async def test_the_layout_survives_a_reload(client: AsyncClient) -> None:
+async def test_the_layout_survives_a_reload(client: AsyncClient, container: Container) -> None:
     dashboard = await _dashboard(client)
-    dataset = await _dataset(client)
+    dataset = await _dataset(container)
     visual = await _add(client, dashboard, dataset, POR_REGION)
 
     saved = await client.put(
@@ -161,10 +174,10 @@ async def test_the_layout_survives_a_reload(client: AsyncClient) -> None:
 
 
 async def test_an_impossible_placement_is_corrected_instead_of_rejected(
-    client: AsyncClient,
+    client: AsyncClient, container: Container
 ) -> None:
     dashboard = await _dashboard(client)
-    dataset = await _dataset(client)
+    dataset = await _dataset(container)
     visual = await _add(client, dashboard, dataset, POR_REGION)
 
     await client.put(
@@ -187,7 +200,7 @@ async def test_a_broken_visual_does_not_take_down_the_dashboard(
     client: AsyncClient, container: Container
 ) -> None:
     dashboard = await _dashboard(client)
-    dataset = await _dataset(client)
+    dataset = await _dataset(container)
     await _add(client, dashboard, dataset, POR_REGION)
     roto = await _add(
         client,
@@ -223,9 +236,9 @@ async def test_a_broken_visual_does_not_take_down_the_dashboard(
     assert "fantasma" in malo["error"]
 
 
-async def test_deleting_a_visual_leaves_the_rest(client: AsyncClient) -> None:
+async def test_deleting_a_visual_leaves_the_rest(client: AsyncClient, container: Container) -> None:
     dashboard = await _dashboard(client)
-    dataset = await _dataset(client)
+    dataset = await _dataset(container)
     first = await _add(client, dashboard, dataset, POR_REGION)
     await _add(client, dashboard, dataset, TOTAL)
 
@@ -240,7 +253,7 @@ async def test_deleting_a_dashboard_takes_its_visuals_with_it(
     client: AsyncClient, container: Container
 ) -> None:
     dashboard = await _dashboard(client)
-    dataset = await _dataset(client)
+    dataset = await _dataset(container)
     await _add(client, dashboard, dataset, POR_REGION)
 
     assert (await client.delete(f"/api/dashboards/{dashboard}")).status_code == 204
@@ -264,7 +277,7 @@ async def test_dashboards_can_be_listed_and_renamed(client: AsyncClient) -> None
 
 
 async def test_adding_a_visual_from_an_unknown_dataset_is_a_404(
-    client: AsyncClient,
+    client: AsyncClient, container: Container
 ) -> None:
     dashboard = await _dashboard(client)
 

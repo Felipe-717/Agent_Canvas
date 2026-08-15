@@ -12,8 +12,7 @@ from fastapi.responses import JSONResponse
 
 from agentcanvas.agent.structured import AgentFailedError
 from agentcanvas.application.ports.llm import LLMError, LLMUnavailableError
-from agentcanvas.application.use_cases.render_visual import DatasetHasNoDataError
-from agentcanvas.domain.dataset.errors import SchemaMismatchError
+from agentcanvas.domain.dataset.errors import DatasetHasNoDataError, SchemaMismatchError
 from agentcanvas.domain.shared.errors import (
     DomainError,
     EmptyFileError,

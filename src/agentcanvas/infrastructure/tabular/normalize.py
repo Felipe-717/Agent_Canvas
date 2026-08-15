@@ -1,31 +1,25 @@
-﻿"""Lectura de CSV/XLSX con pandas e inferencia de tipos logicos.
+"""Normalizacion de una tabla ya extraida.
 
-Aqui vive toda la fealdad de los archivos reales: encodings raros, separadores
-que no son comas, cabeceras con acentos y espacios, columnas fantasma que Excel
-anade al final, fechas escritas de seis maneras. El resto del sistema solo ve un
-`DatasetSchema` limpio y un Parquet.
+Aqui vive la fealdad de los archivos reales: cabeceras con acentos y espacios,
+columnas fantasma que Excel anade al final, fechas escritas de seis maneras. El
+resto del sistema solo ve nombres de columna limpios y tipos logicos.
+
+Lo usa el lector de libros despues de recortar la tabla de donde estuviera.
 """
 
 from __future__ import annotations
 
 import re
 from collections import Counter
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from pandas.api import types as pdt
 
-from agentcanvas.application.ports.tabular import NormalizedTable
 from agentcanvas.domain.dataset.schema import (
-    ColumnSchema,
     ColumnType,
-    DatasetSchema,
     normalize_column_name,
 )
-
-# Encodings por orden de probabilidad en Excel exportado desde Windows en es-ES.
-_CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
 
 _DATE_LIKE = re.compile(
     r"^\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})([ T]\d{1,2}:\d{2}.*)?\s*$"
@@ -34,65 +28,40 @@ _DATE_LIKE = re.compile(
 # Proporcion de la muestra que debe parsear como fecha para convertir la columna.
 _DATE_THRESHOLD = 0.9
 _SAMPLE_SIZE = 200
-
-
-class PandasTabularReader:
-    """Implementa `TabularReaderPort`."""
-
-    def read(
-        self,
-        source: Path,
-        *,
-        destination: Path,
-        preview_rows: int = 10,
-    ) -> NormalizedTable:
-        frame = finalize(_load(source))
-
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        frame.to_parquet(destination, index=False)
-
-        columns = tuple(
-            ColumnSchema(
-                name=str(name),
-                original_name=str(original),
-                type=logical_type(frame[name]),
-                nullable=bool(frame[name].isna().any()),
-            )
-            for name, original in zip(frame.columns, frame.attrs["original_names"], strict=True)
-        )
-        return NormalizedTable(
-            schema_=DatasetSchema(columns=columns),
-            row_count=len(frame),
-            preview=preview_rows_of(frame, preview_rows),
-        )
+_NUMERIC_THRESHOLD = 0.95
 
 
 def finalize(frame: pd.DataFrame) -> pd.DataFrame:
-    """Deja un DataFrame en forma canonica.
+    """Deja un DataFrame en forma canonica: nombres limpios y tipos reales.
 
-    Publico porque lo comparten los dos lectores: el simple, que asume un
-    archivo limpio, y el exploratorio, que rescata una tabla de un Excel
-    caotico. Ambos deben producir exactamente la misma forma.
+    El orden importa. Los numeros van antes que las fechas porque una fecha
+    completa no parsea como numero, pero un ano suelto si; al reves, "2026"
+    acabaria convertido en el 1 de enero.
     """
-    return _coerce_dates(_rename_to_normalized(_drop_ghost_columns(frame)))
+    renamed = _rename_to_normalized(_drop_ghost_columns(frame))
+    return _coerce_dates(_coerce_numbers(renamed))
 
 
-def _load(source: Path) -> pd.DataFrame:
-    if source.suffix.lower() == ".xlsx":
-        return pd.read_excel(source, engine="openpyxl")
-    return _load_csv(source)
+def _coerce_numbers(frame: pd.DataFrame) -> pd.DataFrame:
+    """Convierte a numero las columnas de texto que lo son.
 
-
-def _load_csv(source: Path) -> pd.DataFrame:
-    last_error: Exception | None = None
-    for encoding in _CSV_ENCODINGS:
-        try:
-            # sep=None + engine="python" detecta si el separador es , ; o tab,
-            # que es la primera causa de "el CSV se lee en una sola columna".
-            return pd.read_csv(source, sep=None, engine="python", encoding=encoding)
-        except (UnicodeDecodeError, pd.errors.ParserError) as error:
-            last_error = error
-    raise ValueError(f"No se pudo leer el CSV '{source.name}': {last_error}")
+    Hace falta porque de un CSV todo llega como texto: sin esto, sumar una
+    columna de importes seria imposible y el agente veria "texto" donde hay
+    dinero.
+    """
+    for column in frame.columns:
+        series = frame[column]
+        if not pdt.is_object_dtype(series):
+            continue
+        present = series.dropna()
+        if present.empty:
+            continue
+        converted = pd.to_numeric(series, errors="coerce")
+        # Se exige casi unanimidad: una columna con un "N/A" suelto sigue
+        # siendo numerica, pero una de codigos con algun numero no lo es.
+        if converted.notna().sum() >= len(present) * _NUMERIC_THRESHOLD:
+            frame[column] = converted
+    return frame
 
 
 def _drop_ghost_columns(frame: pd.DataFrame) -> pd.DataFrame:

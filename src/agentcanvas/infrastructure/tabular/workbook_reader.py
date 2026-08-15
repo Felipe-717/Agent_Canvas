@@ -22,7 +22,7 @@ from agentcanvas.domain.workbook.structure import (
     TableSpec,
     WorkbookOverview,
 )
-from agentcanvas.infrastructure.tabular.pandas_reader import (
+from agentcanvas.infrastructure.tabular.normalize import (
     finalize,
     logical_type,
     preview_rows_of,

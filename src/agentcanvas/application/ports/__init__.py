@@ -1,14 +1,14 @@
 """Puertos: las interfaces que la infraestructura debe implementar.
 
 Implementados:
-    FileStoragePort   -> infrastructure.storage (disco local)
-    TabularReaderPort -> infrastructure.tabular (pandas)
-    *RepositoryPort   -> infrastructure.persistence (SQLAlchemy)
-    QueryEnginePort   -> infrastructure.query (compila VisualSpec a agregaciones)
-    LLMPort           -> infrastructure.llm (compatible con la API de OpenAI)
+    FileStoragePort          -> infrastructure.storage (disco local)
+    WorkbookReaderPort       -> infrastructure.tabular (openpyxl)
+    QueryEnginePort          -> infrastructure.query (compila VisualSpec a agregaciones)
+    LLMPort                  -> infrastructure.llm (compatible con la API de OpenAI)
+    *RepositoryPort          -> infrastructure.persistence (SQLAlchemy)
 
 Previstos:
-    CodeExecutorPort  -> infrastructure.execution (subproceso aislado)
+    CodeExecutorPort         -> infrastructure.execution (subproceso aislado)
 """
 
 from agentcanvas.application.ports.llm import (
@@ -27,14 +27,19 @@ from agentcanvas.application.ports.llm import (
 )
 from agentcanvas.application.ports.query import QueryEnginePort
 from agentcanvas.application.ports.repositories import (
+    ConversationRepositoryPort,
+    DashboardRepositoryPort,
     DatasetRepositoryPort,
     StoredFileRepositoryPort,
     UnitOfWorkPort,
 )
 from agentcanvas.application.ports.storage import FileStoragePort
-from agentcanvas.application.ports.tabular import NormalizedTable, TabularReaderPort
+from agentcanvas.application.ports.tabular import NormalizedTable
+from agentcanvas.application.ports.workbook import WorkbookReaderPort
 
 __all__ = [
+    "ConversationRepositoryPort",
+    "DashboardRepositoryPort",
     "DatasetRepositoryPort",
     "FileStoragePort",
     "LLMError",
@@ -49,9 +54,9 @@ __all__ = [
     "ResponseFormat",
     "Role",
     "StoredFileRepositoryPort",
-    "TabularReaderPort",
     "ToolCall",
     "ToolDefinition",
     "UnitOfWorkPort",
     "Usage",
+    "WorkbookReaderPort",
 ]

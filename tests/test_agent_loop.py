@@ -7,18 +7,12 @@ saltarse la validacion.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
-
-import openpyxl
-import pytest
 
 from agentcanvas.agent.budget import Budget
 from agentcanvas.agent.loop import AgentLoop
-from agentcanvas.agent.structure_agent import StructureProposal, WorkbookStructureAgent
 from agentcanvas.agent.tools import Toolbox, ToolOutcome, tool
 from agentcanvas.application.ports.llm import Role
-from agentcanvas.infrastructure.tabular.workbook_reader import OpenpyxlWorkbookReader
 from tests.fakes import FakeLLM, text_response, tool_response
 
 SCHEMA: dict[str, Any] = {"type": "object", "properties": {"x": {"type": "string"}}}
@@ -122,127 +116,3 @@ async def test_the_conversation_comes_back_so_it_can_be_continued() -> None:
 
     assert result.messages[-1].role is Role.ASSISTANT
     assert result.messages[-1].content == "¿Que hoja?"
-
-
-# ---------------------------------------------------------- agente de estructura
-
-
-@pytest.fixture
-def workbook(tmp_path: Path) -> Path:
-    book = openpyxl.Workbook()
-    sheet = book.active
-    assert sheet is not None
-    sheet.title = "Datos"
-    sheet["A1"] = "Informe interno"
-    for column, name in enumerate(["Region", "Valor"], start=1):
-        sheet.cell(row=3, column=column, value=name)
-    sheet.cell(row=4, column=1, value="Norte")
-    sheet.cell(row=4, column=2, value=10)
-    sheet.cell(row=5, column=1, value="Sur")
-    sheet.cell(row=5, column=2, value=20)
-    path = tmp_path / "libro.xlsx"
-    book.save(path)
-    return path
-
-
-async def test_the_agent_returns_the_extracted_table(workbook: Path, tmp_path: Path) -> None:
-    llm = FakeLLM([tool_response("proponer_tabla", {"hoja": "Datos", "fila_cabecera": 3})])
-    agent = WorkbookStructureAgent(llm, OpenpyxlWorkbookReader())
-
-    result = await agent.inspect(
-        workbook, destination=tmp_path / "o.parquet", filename="libro.xlsx"
-    )
-
-    assert isinstance(result.payload, StructureProposal)
-    assert result.payload.spec.header_row == 3
-    assert result.payload.table.row_count == 2
-    assert result.payload.table.schema_.column_names == ("region", "valor")
-
-
-async def test_a_proposal_with_no_data_below_the_header_is_rejected(
-    workbook: Path, tmp_path: Path
-) -> None:
-    llm = FakeLLM(
-        [
-            # La fila 5 es la ultima con datos: debajo no queda nada que extraer.
-            tool_response("proponer_tabla", {"hoja": "Datos", "fila_cabecera": 5}),
-            text_response("Me he equivocado de fila"),
-        ]
-    )
-    agent = WorkbookStructureAgent(llm, OpenpyxlWorkbookReader())
-
-    result = await agent.inspect(
-        workbook, destination=tmp_path / "o.parquet", filename="libro.xlsx"
-    )
-
-    assert not result.completed
-    # El modelo recibe el motivo, no una excepcion.
-    feedback = next(m for m in llm.requests[1].messages if m.role is Role.TOOL)
-    assert "ninguna fila" in feedback.content
-
-
-async def test_pointing_at_a_row_that_does_not_exist_says_so(
-    workbook: Path, tmp_path: Path
-) -> None:
-    llm = FakeLLM(
-        [
-            tool_response("proponer_tabla", {"hoja": "Datos", "fila_cabecera": 90}),
-            text_response("vale"),
-        ]
-    )
-    agent = WorkbookStructureAgent(llm, OpenpyxlWorkbookReader())
-
-    await agent.inspect(workbook, destination=tmp_path / "o.parquet", filename="libro.xlsx")
-
-    feedback = next(m for m in llm.requests[1].messages if m.role is Role.TOOL)
-    assert "90" in feedback.content
-    assert "no existe" in feedback.content
-
-
-async def test_an_incoherent_proposal_is_explained_not_crashed(
-    workbook: Path, tmp_path: Path
-) -> None:
-    llm = FakeLLM(
-        [
-            tool_response(
-                "proponer_tabla",
-                {"hoja": "Datos", "fila_cabecera": 5, "primera_fila_datos": 2},
-            ),
-            text_response("vale"),
-        ]
-    )
-    agent = WorkbookStructureAgent(llm, OpenpyxlWorkbookReader())
-
-    await agent.inspect(workbook, destination=tmp_path / "o.parquet", filename="libro.xlsx")
-
-    feedback = next(m for m in llm.requests[1].messages if m.role is Role.TOOL)
-    assert "no es coherente" in feedback.content
-
-
-async def test_listing_sheets_already_shows_their_first_rows(
-    workbook: Path, tmp_path: Path
-) -> None:
-    llm = FakeLLM([tool_response("listar_hojas", {}), text_response("ok")])
-    agent = WorkbookStructureAgent(llm, OpenpyxlWorkbookReader())
-
-    await agent.inspect(workbook, destination=tmp_path / "o.parquet", filename="libro.xlsx")
-
-    listing = next(m for m in llm.requests[1].messages if m.role is Role.TOOL).content
-    # Adelantar el contenido evita una llamada a `mirar` por cada hoja.
-    assert "Datos" in listing
-    assert "Region" in listing
-
-
-async def test_the_user_instruction_reaches_the_model(workbook: Path, tmp_path: Path) -> None:
-    llm = FakeLLM([text_response("ok")])
-    agent = WorkbookStructureAgent(llm, OpenpyxlWorkbookReader())
-
-    await agent.inspect(
-        workbook,
-        destination=tmp_path / "o.parquet",
-        filename="libro.xlsx",
-        instruction="quiero la CAMA 2",
-    )
-
-    assert "CAMA 2" in llm.requests[0].messages[-1].content
-

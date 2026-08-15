@@ -1,3 +1,3 @@
-from agentcanvas.infrastructure.tabular.pandas_reader import PandasTabularReader
+from agentcanvas.infrastructure.tabular.workbook_reader import OpenpyxlWorkbookReader
 
-__all__ = ["PandasTabularReader"]
+__all__ = ["OpenpyxlWorkbookReader"]

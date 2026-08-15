@@ -23,8 +23,12 @@ from agentcanvas.domain.visual.spec import (
     TimeGrain,
     VisualSpec,
 )
+from agentcanvas.domain.workbook.structure import TableSpec
 from agentcanvas.infrastructure.query.pandas_engine import PandasQueryEngine
-from agentcanvas.infrastructure.tabular.pandas_reader import PandasTabularReader
+from agentcanvas.infrastructure.tabular.workbook_reader import (
+    CSV_SHEET,
+    OpenpyxlWorkbookReader,
+)
 
 VENTAS = (
     b"fecha,region,producto,cantidad,valor\n"
@@ -42,7 +46,9 @@ def dataset(tmp_path: Path) -> tuple[Path, NormalizedTable]:
     source = tmp_path / "ventas.csv"
     source.write_bytes(VENTAS)
     parquet = tmp_path / "ventas.parquet"
-    table = PandasTabularReader().read(source, destination=parquet)
+    table = OpenpyxlWorkbookReader().extract(
+        source, TableSpec(sheet=CSV_SHEET, header_row=1), destination=parquet
+    )
     return parquet, table
 
 

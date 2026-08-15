@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
 
 import openpyxl
 import pytest
@@ -19,6 +18,7 @@ from httpx import ASGITransport, AsyncClient
 from agentcanvas.application.ports.llm import Role
 from agentcanvas.bootstrap.container import Container
 from agentcanvas.infrastructure.web.app import create_app
+from tests.factories import make_dataset
 from tests.fakes import FakeLLM, text_response, tool_response
 
 
@@ -104,19 +104,18 @@ async def test_another_conversation_does_not_see_that_data(
     assert dataset_id not in _system_notes(llm)
 
 
-async def test_data_uploaded_outside_the_chat_is_invisible_to_it(
-    client: AsyncClient, llm: FakeLLM
+async def test_data_prepared_elsewhere_is_invisible_to_a_conversation(
+    client: AsyncClient, llm: FakeLLM, container: Container
 ) -> None:
-    # Lo que subio otra pantalla no es asunto de esta conversacion.
-    csv = b"fecha,region,valor\n2026-01-01,Norte,10\n"
-    uploaded = await client.post(
-        "/api/datasets", files={"file": ("ajeno.csv", csv, "text/csv")}
+    # Lo que exista en el sistema por otra via no es asunto de esta charla.
+    ajeno = await make_dataset(
+        container,
+        name="ajeno",
+        csv=b"fecha,region,valor\n2026-01-01,Norte,10\n",
     )
-    assert uploaded.status_code == 201
-    ajeno: dict[str, Any] = uploaded.json()
 
     conversation = (await client.post("/api/conversations")).json()["id"]
     llm.queue(text_response("Hola."))
     await client.post(f"/api/conversations/{conversation}/messages", data={"text": "hola"})
 
-    assert ajeno["dataset"]["id"] not in _system_notes(llm)
+    assert ajeno.id not in _system_notes(llm)

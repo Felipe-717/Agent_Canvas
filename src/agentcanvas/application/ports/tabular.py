@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Protocol
-
 from pydantic import BaseModel, ConfigDict
 
 from agentcanvas.domain.dataset.schema import DatasetSchema
@@ -19,18 +16,3 @@ class NormalizedTable(BaseModel):
     """Primeras filas. Es lo que se le ensena al agente para que entienda los
     datos sin tener que darle el archivo entero."""
 
-
-class TabularReaderPort(Protocol):
-    """Lee CSV/XLSX, infiere tipos y escribe la version normalizada en Parquet.
-
-    Toda la fealdad de los archivos reales (encodings, separadores, cabeceras
-    con espacios, columnas fantasma) queda encerrada detras de este puerto.
-    """
-
-    def read(
-        self,
-        source: Path,
-        *,
-        destination: Path,
-        preview_rows: int = 10,
-    ) -> NormalizedTable: ...
