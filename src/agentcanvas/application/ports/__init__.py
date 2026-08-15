@@ -1,16 +1,31 @@
 """Puertos: las interfaces que la infraestructura debe implementar.
 
-Implementados en Fase 1:
+Implementados:
     FileStoragePort   -> infrastructure.storage (disco local)
     TabularReaderPort -> infrastructure.tabular (pandas)
     *RepositoryPort   -> infrastructure.persistence (SQLAlchemy)
+    QueryEnginePort   -> infrastructure.query (compila VisualSpec a agregaciones)
+    LLMPort           -> infrastructure.llm (compatible con la API de OpenAI)
 
 Previstos:
-    LLMPort           -> infrastructure.llm (compatible con la API de OpenAI)
     CodeExecutorPort  -> infrastructure.execution (subproceso aislado)
-    QueryEnginePort   -> infrastructure.query (compila VisualSpec a agregaciones)
 """
 
+from agentcanvas.application.ports.llm import (
+    LLMError,
+    LLMPort,
+    LLMProtocolError,
+    LLMRequest,
+    LLMResponse,
+    LLMUnavailableError,
+    Message,
+    ResponseFormat,
+    Role,
+    ToolCall,
+    ToolDefinition,
+    Usage,
+)
+from agentcanvas.application.ports.query import QueryEnginePort
 from agentcanvas.application.ports.repositories import (
     DatasetRepositoryPort,
     StoredFileRepositoryPort,
@@ -22,8 +37,21 @@ from agentcanvas.application.ports.tabular import NormalizedTable, TabularReader
 __all__ = [
     "DatasetRepositoryPort",
     "FileStoragePort",
+    "LLMError",
+    "LLMPort",
+    "LLMProtocolError",
+    "LLMRequest",
+    "LLMResponse",
+    "LLMUnavailableError",
+    "Message",
     "NormalizedTable",
+    "QueryEnginePort",
+    "ResponseFormat",
+    "Role",
     "StoredFileRepositoryPort",
     "TabularReaderPort",
+    "ToolCall",
+    "ToolDefinition",
     "UnitOfWorkPort",
+    "Usage",
 ]
