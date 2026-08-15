@@ -25,10 +25,12 @@ from agentcanvas.application.ports.repositories import (
 from agentcanvas.application.ports.storage import FileStoragePort
 from agentcanvas.application.ports.tabular import TabularReaderPort
 from agentcanvas.application.use_cases.create_visual import CreateVisualUseCase
+from agentcanvas.application.use_cases.dashboards import DashboardService
 from agentcanvas.application.use_cases.ingest_file import IngestFileUseCase
 from agentcanvas.application.use_cases.render_visual import RenderVisualUseCase
 from agentcanvas.config import Settings, get_settings
 from agentcanvas.infrastructure.llm.factory import build_llm
+from agentcanvas.infrastructure.persistence.dashboards import SqlAlchemyDashboardRepository
 from agentcanvas.infrastructure.persistence.repositories import (
     SqlAlchemyDatasetRepository,
     SqlAlchemyStoredFileRepository,
@@ -50,6 +52,15 @@ class Container:
     query_engine: QueryEnginePort
     sampler: DatasetSamplerPort
     llm: LLMPort
+
+    def dashboards(self, session: AsyncSession) -> DashboardService:
+        return DashboardService(
+            dashboards=SqlAlchemyDashboardRepository(session),
+            datasets=SqlAlchemyDatasetRepository(session),
+            storage=self.storage,
+            engine=self.query_engine,
+            uow=SqlAlchemyUnitOfWork(session),
+        )
 
     def create_visual(self, session: AsyncSession) -> CreateVisualUseCase:
         datasets: DatasetRepositoryPort = SqlAlchemyDatasetRepository(session)

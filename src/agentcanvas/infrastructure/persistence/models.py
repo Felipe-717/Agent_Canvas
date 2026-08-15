@@ -13,6 +13,8 @@ from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from agentcanvas.domain.dataset.schema import DatasetSchema
+from agentcanvas.domain.visual.dashboard import Placement
+from agentcanvas.domain.visual.spec import VisualSpec
 from agentcanvas.infrastructure.persistence.types import PydanticJSON
 
 
@@ -52,6 +54,38 @@ class DatasetRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_datasets_owner_fingerprint", "owner_id", "fingerprint"),)
+
+
+class DashboardRow(Base):
+    __tablename__ = "dashboards"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class VisualRow(Base):
+    """Un grafico guardado: de donde salen los datos, como se calculan y donde va.
+
+    Ni un solo valor. Esa es la diferencia entre un dashboard que se actualiza
+    solo y una captura de pantalla.
+    """
+
+    __tablename__ = "visuals"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    dashboard_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("dashboards.id", ondelete="CASCADE"), index=True
+    )
+    dataset_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("datasets.id", ondelete="CASCADE"), index=True
+    )
+    spec: Mapped[VisualSpec] = mapped_column(PydanticJSON(VisualSpec))
+    placement: Mapped[Placement] = mapped_column(PydanticJSON(Placement))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class DatasetVersionRow(Base):

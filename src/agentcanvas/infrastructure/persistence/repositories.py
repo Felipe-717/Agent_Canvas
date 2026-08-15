@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import UTC, datetime
 
@@ -13,7 +13,7 @@ from agentcanvas.infrastructure.persistence.models import (
 )
 
 
-def _aware(value: datetime) -> datetime:
+def aware(value: datetime) -> datetime:
     """SQLite no guarda zona horaria: se la devolvemos al salir.
 
     Sin esto, comparar `created_at` de una fila leida con `utcnow()` revienta
@@ -162,7 +162,7 @@ def _to_file(row: StoredFileRow) -> StoredFile:
         size_bytes=row.size_bytes,
         checksum=row.checksum,
         storage_key=row.storage_key,
-        created_at=_aware(row.created_at),
+        created_at=aware(row.created_at),
     )
 
 
@@ -174,8 +174,8 @@ def _to_dataset(row: DatasetRow) -> Dataset:
         schema=row.schema_json,
         current_version_id=row.current_version_id,
         row_count=row.row_count,
-        created_at=_aware(row.created_at),
-        updated_at=_aware(row.updated_at),
+        created_at=aware(row.created_at),
+        updated_at=aware(row.updated_at),
     )
 
 
@@ -187,5 +187,6 @@ def _to_version(row: DatasetVersionRow) -> DatasetVersion:
         storage_key=row.storage_key,
         row_count=row.row_count,
         schema_fingerprint=row.schema_fingerprint,
-        created_at=_aware(row.created_at),
+        created_at=aware(row.created_at),
     )
+
